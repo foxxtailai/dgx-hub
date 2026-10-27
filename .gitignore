@@ -1,5 +1,6 @@
 # Local tooling and caches
 /.tools/
+/.localFiles/
 /.cache/
 node_modules/
 *.tsbuildinfo
