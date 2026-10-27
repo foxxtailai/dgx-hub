@@ -1,0 +1,33 @@
+# Local tooling and caches
+/.tools/
+/.cache/
+node_modules/
+*.tsbuildinfo
+
+# Generated application/frontend builds and Windows resources
+/dist/
+/web/dist/
+/cmd/dgx-hub/*.syso
+*.exe
+*.test
+/coverage/
+/coverage.out
+
+# Runtime data and local configuration
+*.log
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+/.ssh/
+
+# Editor and OS temporary files
+.idea/
+*.swp
+*.swo
+*.tmp
+.DS_Store
+Thumbs.db
+Desktop.ini
