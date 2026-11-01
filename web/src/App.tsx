@@ -6,6 +6,7 @@ import { t } from './strings';
 import { Modal } from './Modal';
 import { NodeActions } from './Actions';
 import { ConnectXStatus } from './ConnectXStatus';
+import appIcon from './assets/app-icon.png';
 import { NodeName, nodeColorClass, nodeColors } from './NodeName';
 import type { Metrics, Node, NodeInput, Service, ServiceInput, SSHCheck, TerminalResult } from './types';
 
@@ -173,7 +174,7 @@ export default function App() {
   const online = nodes.filter(node => metrics[node.id]?.status === 'online').length;
   const deleteServices = editor?.type === 'delete-node' ? services.filter(service => service.node_id === editor.node.id) : [];
   return <div className="app-shell">
-    <aside className="sidebar"><a className="brand" href="#"><span className="brand-mark"><Icon name="plus" size={27} /></span>{t.app}</a><div className="sidebar-label">{t.workspace}</div><a href="#" className="nav-item active"><Icon name="grid" size={18} />{t.overview}</a><a href="#nodes" className="nav-item"><Icon name="server" size={18} />{t.nodes}<span>{nodes.length}</span></a><a href="#services" className="nav-item"><Icon name="link" size={18} />{t.services}<span>{services.length}</span></a><div className="sidebar-bottom"><div className="local-icon"><Icon name="shield" size={17} /></div><div><strong>{t.local}</strong><p>{t.localDetail}</p></div></div><div className="sidebar-version">{session?.version ? `v${session.version.replace(/^v/, '')}` : t.app}</div></aside>
+    <aside className="sidebar"><a className="brand" href="#" aria-label={t.app}><img className="brand-mark" src={appIcon} width={128} height={128} alt="" /></a><div className="sidebar-label">{t.workspace}</div><a href="#" className="nav-item active"><Icon name="grid" size={18} />{t.overview}</a><a href="#nodes" className="nav-item"><Icon name="server" size={18} />{t.nodes}<span>{nodes.length}</span></a><a href="#services" className="nav-item"><Icon name="link" size={18} />{t.services}<span>{services.length}</span></a><div className="sidebar-bottom"><div className="local-icon"><Icon name="shield" size={17} /></div><div><strong>{t.local}</strong><p>{t.localDetail}</p></div></div><div className="sidebar-version">{session?.version ? `v${session.version.replace(/^v/, '')}` : t.app}</div></aside>
     <div className="main-shell"><header className="topbar"><span className="breadcrumb">{t.workspace}<Icon name="chevron" size={13} /><strong>{t.overview}</strong></span><span className="ssh-badge"><Icon name="shield" size={14} />{t.encrypted}</span></header>
       <main><div className="page-heading"><div className="heading-copy"><p className="eyebrow">{t.tagline}</p><h1>{t.title}</h1><p>{t.subtitle}</p></div><button className="button button-secondary refresh-button" onClick={() => void refresh()} disabled={refreshing}><Icon name="refresh" className={refreshing ? 'spin' : ''} size={16} />{refreshing ? t.refreshing : t.refresh}</button></div>
         {connectionError && <div className="connection-error" role="alert"><Icon name="alert" size={18} /><span>{connectionError}</span><button className="button button-quiet" onClick={() => void refresh()}>{t.refresh}</button></div>}

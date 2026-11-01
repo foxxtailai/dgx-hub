@@ -4,6 +4,7 @@ package platform
 
 import (
 	"context"
+	"encoding/binary"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,12 +40,23 @@ func TestBackgroundUsesHiddenConsoleFlags(t *testing.T) {
 }
 
 func TestNativeIconResourceLoads(t *testing.T) {
-	resource := iconResource()
-	icon, _, err := procCreateIcon.Call(uintptr(unsafe.Pointer(&resource[0])), uintptr(len(resource)), 1, 0x00030000, 32, 32, 0)
-	if icon == 0 {
-		t.Fatalf("native icon could not be decoded: %v", err)
+	ico := IconICO()
+	count := int(binary.LittleEndian.Uint16(ico[4:6]))
+	for i := 0; i < count; i++ {
+		entry := ico[6+i*16 : 22+i*16]
+		size := int(entry[0])
+		if size == 0 {
+			size = 256
+		}
+		offset := binary.LittleEndian.Uint32(entry[12:16])
+		length := binary.LittleEndian.Uint32(entry[8:12])
+		resource := ico[offset : offset+length]
+		icon, _, err := procCreateIcon.Call(uintptr(unsafe.Pointer(&resource[0])), uintptr(len(resource)), 1, 0x00030000, uintptr(size), uintptr(size), 0)
+		if icon == 0 {
+			t.Fatalf("native %dpx icon could not be decoded: %v", size, err)
+		}
+		procDestroyIcon.Call(icon)
 	}
-	procDestroyIcon.Call(icon)
 }
 
 func TestDataDirUsesWindowsUserData(t *testing.T) {

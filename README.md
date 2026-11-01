@@ -12,7 +12,7 @@ On the first normal launch, DGX Hub imports the existing `%LOCALAPPDATA%\FoxHub\
 
 1. Download or build `dist/dgx-hub.exe`. It is a standalone binary with the React UI embedded; Node.js and Go are only needed for building.
 2. Enable **OpenSSH Client** in Windows Optional Features if `ssh -V` does not work. The client is needed on this PC; installing an SSH server on this PC is unnecessary.
-3. Run `dgx-hub.exe`. It stays in the background and adds a **green plus** icon to the notification area. Windows may place it in the hidden-icons overflow.
+3. Run `dgx-hub.exe`. It stays in the background and adds the **DGX Hub fox** icon to the notification area. Windows may place it in the hidden-icons overflow.
 4. Right-click the icon and choose **Open DGX Hub**. The default address is `http://127.0.0.1:8787`.
 5. Add your nodes using the same target you use with `ssh`, such as `spark_1` or `user@192.168.1.10`. No nodes or services are added automatically.
 6. Choose **SSH setup** on each node card. DGX Hub checks background access and shows step-by-step help when keys or host-key trust need attention.
@@ -133,6 +133,10 @@ Prerequisites: Go **1.26+**, Node.js **22.12+**, npm, and system OpenSSH. SQLite
 The script builds the React UI, runs frontend and Go tests, and writes `dist/dgx-hub.exe`. `-SkipInstall` reuses an existing `web/node_modules`. Go caches stay inside `.cache/`; a local SDK at `.tools/go/bin/go.exe` is recognized when Go is absent from PATH.
 
 Generated UI files, Windows resources, SDKs, caches and release binaries are excluded from Git. A fresh checkout must build `web/dist` before direct Go tests/builds; `build.ps1` performs these steps in order. Keep `go.sum` and `web/package-lock.json` in the repository.
+
+The application artwork is kept in `assets/app-icon.png`. On Windows, `./scripts/update-icons.ps1` regenerates the committed multi-size native icon, ICO fallback, transparent PNG favicon and dashboard logo from that image. The web PNGs live in `web/src/assets` and Vite gives them content-based filenames, so an older browser icon cannot persist at the same URL. The sidebar shows only the centered logo, at 128px on a full sidebar and 48/40px on compact layouts. The exe embeds every icon size from 16 to 256 pixels; the tray uses its 32px DIB image. Normal builds use these committed assets and do not require image tools.
+
+Windows builds refresh the exe's Shell image entry and notify Explorer of the changed file. If a legacy icon still remains in Explorer, run `./scripts/refresh-exe-icon.ps1 -Executable ./dist/dgx-hub.exe -RebuildCache` once. This asks the Shell to invalidate its persistent icon cache without deleting cache files, changing file associations or closing Explorer windows.
 
 Console development build, after building the UI:
 

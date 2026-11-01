@@ -55,6 +55,9 @@ try {
         }
         & $goExecutable build -trimpath -ldflags $buildFlags -o $buildOutput ./cmd/dgx-hub
         if ($LASTEXITCODE -ne 0) { throw ('Build failed: ' + $buildTarget) }
+        if ($env:GOOS -eq 'windows') {
+            & (Join-Path $PSScriptRoot 'scripts\refresh-exe-icon.ps1') -Executable $buildOutput
+        }
         Get-FileHash -LiteralPath $buildOutput -Algorithm SHA256
     }
 }

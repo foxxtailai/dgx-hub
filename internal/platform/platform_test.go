@@ -31,14 +31,21 @@ func TestBrowserOnlyOpensWebAddresses(t *testing.T) {
 
 func TestICOContainsNativeResource(t *testing.T) {
 	icon := IconICO()
-	if binary.LittleEndian.Uint16(icon[2:4]) != 1 || binary.LittleEndian.Uint16(icon[4:6]) != 1 {
+	if binary.LittleEndian.Uint16(icon[2:4]) != 1 || binary.LittleEndian.Uint16(icon[4:6]) != 9 {
 		t.Fatal("invalid ICO directory")
 	}
-	offset := binary.LittleEndian.Uint32(icon[18:22])
-	if int(offset)+int(binary.LittleEndian.Uint32(icon[14:18])) != len(icon) {
-		t.Fatal("ICO resource size mismatch")
+	for i, size := range []int{16, 20, 24, 32, 40, 48, 64, 128, 256} {
+		entry := icon[6+i*16 : 22+i*16]
+		if int(entry[0]) != size%256 || int(entry[1]) != size%256 {
+			t.Fatalf("missing icon size %d", size)
+		}
+		offset := binary.LittleEndian.Uint32(entry[12:16])
+		length := binary.LittleEndian.Uint32(entry[8:12])
+		if length == 0 || uint64(offset)+uint64(length) > uint64(len(icon)) {
+			t.Fatal("ICO resource size mismatch")
+		}
 	}
-	if binary.LittleEndian.Uint32(icon[offset:offset+4]) != 40 {
-		t.Fatal("missing DIB resource header")
+	if binary.LittleEndian.Uint32(iconResource()[:4]) != 40 {
+		t.Fatal("missing native tray DIB resource")
 	}
 }

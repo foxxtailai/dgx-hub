@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -21,7 +22,7 @@ import (
 func main() {
 	output := flag.String("out", "", "output Windows/amd64 .syso file")
 	version := flag.String("version", "0.1.2", "application version (major.minor.patch)")
-	iconPath := flag.String("icon", "", "optional ICO file; defaults to DGX Hub's green plus")
+	iconPath := flag.String("icon", "", "optional ICO file; defaults to DGX Hub's application icon")
 	flag.Parse()
 	if *output == "" {
 		fail(errors.New("-out is required"))
@@ -50,11 +51,12 @@ func fail(err error) { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
 
 type resource struct {
 	kind uint32
+	id   uint32
 	data []byte
 }
 
 func buildObject(ico []byte, version string) ([]byte, error) {
-	image, group, err := iconResources(ico)
+	images, group, err := iconResources(ico)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +64,7 @@ func buildObject(ico []byte, version string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	resources := []resource{{3, image}, {14, group}, {16, versionInfo}, {24, []byte(applicationManifest)}}
+	resources := append(images, resource{14, 1, group}, resource{16, 1, versionInfo}, resource{24, 1, []byte(applicationManifest)})
 	raw, relocations := resourceSection(resources)
 	const headerSize = 20 + 40
 	symbolOffset := headerSize + len(raw) + len(relocations)*10
@@ -91,7 +93,7 @@ func buildObject(ico []byte, version string) ([]byte, error) {
 	return object, nil
 }
 
-func iconResources(ico []byte) ([]byte, []byte, error) {
+func iconResources(ico []byte) ([]resource, []byte, error) {
 	if len(ico) < 22 || binary.LittleEndian.Uint16(ico[0:2]) != 0 || binary.LittleEndian.Uint16(ico[2:4]) != 1 {
 		return nil, nil, errors.New("invalid ICO header")
 	}
@@ -99,46 +101,69 @@ func iconResources(ico []byte) ([]byte, []byte, error) {
 	if count < 1 || count > (len(ico)-6)/16 {
 		return nil, nil, errors.New("invalid ICO directory")
 	}
-	selected := 6
+	images := make([]resource, 0, count)
+	group := make([]byte, 6+14*count)
+	put16(group, 2, 1)
+	put16(group, 4, uint16(count))
 	for i := 0; i < count; i++ {
 		at := 6 + i*16
-		if ico[at] == 32 && ico[at+1] == 32 {
-			selected = at
-			break
+		entry := ico[at : at+16]
+		size := uint64(binary.LittleEndian.Uint32(entry[8:12]))
+		offset := uint64(binary.LittleEndian.Uint32(entry[12:16]))
+		if size == 0 || offset < uint64(6+count*16) || offset+size > uint64(len(ico)) {
+			return nil, nil, errors.New("invalid ICO image bounds")
 		}
+		images = append(images, resource{3, uint32(i + 1), ico[offset : offset+size]})
+		groupAt := 6 + i*14
+		copy(group[groupAt:groupAt+12], entry[:12])
+		put16(group, groupAt+12, uint16(i+1))
 	}
-	entry := ico[selected : selected+16]
-	size := uint64(binary.LittleEndian.Uint32(entry[8:12]))
-	offset := uint64(binary.LittleEndian.Uint32(entry[12:16]))
-	if size == 0 || offset < uint64(6+count*16) || offset+size > uint64(len(ico)) {
-		return nil, nil, errors.New("invalid ICO image bounds")
-	}
-	group := make([]byte, 20)
-	put16(group, 2, 1)
-	put16(group, 4, 1)
-	copy(group[6:18], entry[:12])
-	put16(group, 18, 1)
-	return ico[offset : offset+size], group, nil
+	return images, group, nil
 }
 
 func resourceSection(resources []resource) ([]byte, []uint32) {
-	// Three numeric directory levels: resource type, name=1, language=en-US.
-	data := make([]byte, 16+8*len(resources))
-	put16(data, 14, uint16(len(resources)))
+	// Three sorted numeric directory levels: resource type, image ID, en-US.
+	// Every icon size has its own RT_ICON entry under the same resource type.
+	resources = slices.Clone(resources)
+	slices.SortFunc(resources, func(a, b resource) int {
+		if a.kind != b.kind {
+			return int(a.kind) - int(b.kind)
+		}
+		return int(a.id) - int(b.id)
+	})
+	var kinds []uint32
+	for _, item := range resources {
+		if len(kinds) == 0 || kinds[len(kinds)-1] != item.kind {
+			kinds = append(kinds, item.kind)
+		}
+	}
+	data := make([]byte, 16+8*len(kinds))
+	put16(data, 14, uint16(len(kinds)))
 	entries := make([]int, len(resources))
-	for i, item := range resources {
+	index := 0
+	for typeIndex, kind := range kinds {
+		start := index
+		for index < len(resources) && resources[index].kind == kind {
+			index++
+		}
+		count := index - start
 		typeOffset := len(data)
-		data = append(data, make([]byte, 24+24+16)...)
-		languageOffset, dataOffset := typeOffset+24, typeOffset+48
-		put32(data, 16+i*8, item.kind)
-		put32(data, 20+i*8, uint32(typeOffset)|0x80000000)
-		put16(data, typeOffset+14, 1)
-		put32(data, typeOffset+16, 1)
-		put32(data, typeOffset+20, uint32(languageOffset)|0x80000000)
-		put16(data, languageOffset+14, 1)
-		put32(data, languageOffset+16, 0x0409)
-		put32(data, languageOffset+20, uint32(dataOffset))
-		entries[i] = dataOffset
+		data = append(data, make([]byte, 16+8*count)...)
+		put32(data, 16+typeIndex*8, kind)
+		put32(data, 20+typeIndex*8, uint32(typeOffset)|0x80000000)
+		put16(data, typeOffset+14, uint16(count))
+		for i := start; i < index; i++ {
+			languageOffset := len(data)
+			data = append(data, make([]byte, 24+16)...)
+			dataOffset := languageOffset + 24
+			nameAt := typeOffset + 16 + (i-start)*8
+			put32(data, nameAt, resources[i].id)
+			put32(data, nameAt+4, uint32(languageOffset)|0x80000000)
+			put16(data, languageOffset+14, 1)
+			put32(data, languageOffset+16, 0x0409)
+			put32(data, languageOffset+20, uint32(dataOffset))
+			entries[i] = dataOffset
+		}
 	}
 	relocations := make([]uint32, len(resources))
 	for i, item := range resources {

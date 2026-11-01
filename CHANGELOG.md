@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Larger centered sidebar logo without a duplicate app name, plus a transparent PNG favicon with a content-based URL to avoid old browser icons. An explicit Shell cache repair handles legacy exe icons that survive ordinary refreshes.
+- Supplied transparent DGX Hub fox artwork replaces the application, tray, browser favicon and dashboard brand icons. Windows resources include nine sizes from 16 to 256 pixels; Windows builds notify Explorer to refresh the exe's cached file icon.
 - ConnectX status on node cards, with automatically identified peer nodes, interface pairs and negotiated speeds. Bounded interface-bound IPv4/IPv6 checks distinguish a verified peer from carrier-only, disconnected, undetected and unavailable states; stale or deleted peers cannot remain connected.
 - Device Temp and Device Power on node cards, with independent N/A handling and stale readings preserved after SSH failure.
 - Dashboard refresh pauses while any settings or Actions window is open, ignores cancelled requests and resumes once on close. Action execution and live logs continue independently.
