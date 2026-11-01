@@ -3,10 +3,17 @@ export interface Node { id: string; name: string; color: NodeColor; ssh_target: 
 export interface Service { id: string; name: string; node_id: string; remote_host: string; remote_port: number; scheme: string; path: string }
 export interface Memory { used: number; total: number; percent: number }
 export interface Disk extends Memory { path: string; mount: string }
+export interface ConnectXLink { interface: string; peer_interface: string; speed_mbps: number }
+export interface ConnectX {
+  status: 'connected' | 'disconnected' | 'link_up' | 'not_detected' | 'unknown';
+  interfaces: { name: string; mac: string; state: string; speed_mbps: number; addresses: string[] }[];
+  peers: { node_id: string; links: ConnectXLink[] }[];
+}
 export interface Metrics {
   node_id: string; status: string; last_success?: string; stale: boolean; cpu: number | null;
   gpu: number | null; temperature_c: number | null; power_w: number | null;
   memory: Memory | null; disks: Disk[] | null; errors: Record<string, string> | null;
+  connectx?: ConnectX | null;
 }
 export interface SetupStep { title: string; description: string; command?: string }
 export interface SSHCheck { ok: boolean; code: string; message: string; command: string; steps: SetupStep[] }

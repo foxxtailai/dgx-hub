@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- ConnectX status on node cards, with automatically identified peer nodes, interface pairs and negotiated speeds. Bounded interface-bound IPv4/IPv6 checks distinguish a verified peer from carrier-only, disconnected, undetected and unavailable states; stale or deleted peers cannot remain connected.
 - Device Temp and Device Power on node cards, with independent N/A handling and stale readings preserved after SSH failure.
 - Dashboard refresh pauses while any settings or Actions window is open, ignores cancelled requests and resumes once on close. Action execution and live logs continue independently.
 - Frontend regression tests cover refresh timing, cancellation, form state and independent action polling; both build scripts run them.

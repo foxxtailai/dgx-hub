@@ -34,7 +34,7 @@ func New() *Collector {
 	return &Collector{nodes: make(map[string]*nodeState), slots: make(chan struct{}, 4), run: sshutil.Run, checkConfig: sshutil.ValidateBackgroundConfig}
 }
 func empty(id string) model.Metrics {
-	return model.Metrics{NodeID: id, Status: "connecting", Disks: []model.Disk{}, Errors: map[string]string{}}
+	return model.Metrics{NodeID: id, Status: "connecting", Disks: []model.Disk{}, ConnectX: emptyConnectX(), Errors: map[string]string{}}
 }
 func (c *Collector) state(id string) *nodeState {
 	c.mu.Lock()
@@ -72,6 +72,7 @@ func clone(m model.Metrics) model.Metrics {
 		m.LastSuccess = &v
 	}
 	m.Disks = append([]model.Disk{}, m.Disks...)
+	m.ConnectX = cloneConnectX(m.ConnectX)
 	copyErrors := make(map[string]string, len(m.Errors))
 	for k, v := range m.Errors {
 		copyErrors[k] = v
@@ -116,7 +117,8 @@ func (c *Collector) Poll(ctx context.Context, node model.Node) model.Metrics {
 		return c.failed(s, node.ID, errors.New("data path must be an absolute Linux path without control characters"), "")
 	}
 	args := append(sshutil.BaseArgs(), "-o", "ClearAllForwardings=yes", node.SSHTarget, "sh -c "+sshutil.ShellQuote(metricsScript))
-	out, stderr, err := c.run(ctx, args, strings.NewReader(node.DataPath+"\n"))
+	targets := c.connectXTargets(node.ID, time.Now())
+	out, stderr, err := c.run(ctx, args, strings.NewReader(node.DataPath+"\n"+targets))
 	if err != nil {
 		if ctx.Err() != nil {
 			err = ctx.Err()
@@ -194,7 +196,7 @@ if command -v nvidia-smi >/dev/null 2>&1; then
 else for field in gpu temperature power; do printf 'ERROR\t%s\tnvidia-smi is not installed\n' "$field"; done; fi
 sleep 0.3
 awk '/^cpu / {printf "CPU2"; for(i=2;i<=9;i++) printf "\t%s",$i; printf "\n"; exit}' /proc/stat 2>/dev/null || printf 'ERROR\tcpu\tCannot read second /proc/stat sample\n'
-`
+` + connectXScript
 
 func Parse(output, nodeID, dataPath string) (model.Metrics, error) {
 	m := empty(nodeID)
@@ -219,6 +221,8 @@ func Parse(output, nodeID, dataPath string) (model.Metrics, error) {
 			continue
 		}
 		switch p[0] {
+		case "CX_BEGIN", "CX_IF", "CX_ADDR", "CX_REACH":
+			parseConnectX(p, &m)
 		case "CPU1", "CPU2":
 			values, err := parseCPU(p[1:])
 			if err != nil {
@@ -338,6 +342,18 @@ func Parse(output, nodeID, dataPath string) (model.Metrics, error) {
 	}
 	if len(m.Disks) == 0 && m.Errors["disk"] == "" && m.Errors["disk_root"] == "" {
 		m.Errors["disk"] = "Disk readings are unavailable"
+	}
+	if len(m.ConnectX.Interfaces) > 0 {
+		m.ConnectX.Status = "disconnected"
+		for _, iface := range m.ConnectX.Interfaces {
+			if iface.State == "up" {
+				m.ConnectX.Status = "link_up"
+				break
+			}
+			if iface.State == "unknown" {
+				m.ConnectX.Status = "unknown"
+			}
+		}
 	}
 	return m, nil
 }

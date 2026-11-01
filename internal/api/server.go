@@ -22,6 +22,7 @@ import (
 	"dgx-hub/internal/platform"
 	"dgx-hub/internal/sshutil"
 	"dgx-hub/internal/storage"
+	"dgx-hub/internal/telemetry"
 	"dgx-hub/internal/validation"
 )
 
@@ -262,6 +263,17 @@ func (s *Server) nodeMetrics(w http.ResponseWriter, r *http.Request) {
 	if m.Disks == nil {
 		m.Disks = []model.Disk{}
 	}
+	nodes, err := s.store.Nodes()
+	if handleError(w, err) {
+		return
+	}
+	readings := make(map[string]model.Metrics, len(nodes))
+	for _, node := range nodes {
+		if node.ID != id {
+			readings[node.ID] = s.metrics.Get(node.ID)
+		}
+	}
+	m.ConnectX = telemetry.ResolveConnectX(m, readings, time.Now())
 	jsonResponse(w, 200, m)
 }
 func (s *Server) checkNode(w http.ResponseWriter, r *http.Request) {

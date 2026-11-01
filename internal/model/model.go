@@ -34,6 +34,38 @@ type Disk struct {
 	Percent float64 `json:"percent"`
 }
 
+type ConnectXInterface struct {
+	Name      string   `json:"name"`
+	MAC       string   `json:"mac"`
+	State     string   `json:"state"`
+	SpeedMbps int      `json:"speed_mbps"`
+	Addresses []string `json:"addresses"`
+}
+
+type ConnectXReachability struct {
+	Interface string `json:"interface"`
+	Address   string `json:"address"`
+	MAC       string `json:"mac"`
+}
+
+type ConnectXLink struct {
+	Interface     string `json:"interface"`
+	PeerInterface string `json:"peer_interface"`
+	SpeedMbps     int    `json:"speed_mbps"`
+}
+
+type ConnectXPeer struct {
+	NodeID string         `json:"node_id"`
+	Links  []ConnectXLink `json:"links"`
+}
+
+type ConnectX struct {
+	Status     string                 `json:"status"`
+	Interfaces []ConnectXInterface    `json:"interfaces"`
+	Reachable  []ConnectXReachability `json:"reachable"`
+	Peers      []ConnectXPeer         `json:"peers"`
+}
+
 type Metrics struct {
 	NodeID       string            `json:"node_id"`
 	Status       string            `json:"status"`
@@ -45,6 +77,7 @@ type Metrics struct {
 	PowerW       *float64          `json:"power_w"`
 	Memory       *Memory           `json:"memory"`
 	Disks        []Disk            `json:"disks"`
+	ConnectX     *ConnectX         `json:"connectx"`
 	Errors       map[string]string `json:"errors"`
 }
 
