@@ -45,3 +45,21 @@ func TestDefaultsAndLinuxDataPath(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNodeColors(t *testing.T) {
+	for _, color := range []string{"", "green", "blue", "orange", "red", "yellow"} {
+		n := model.Node{Name: "Node", SSHTarget: "node", Color: color}
+		if err := Node(&n); err != nil {
+			t.Fatalf("color %q: %v", color, err)
+		}
+		if color == "" && n.Color != "green" {
+			t.Fatalf("missing default color: %+v", n)
+		}
+	}
+	for _, color := range []string{"purple", "#ff0000", "Blue", " blue "} {
+		n := model.Node{Name: "Node", SSHTarget: "node", Color: color}
+		if err := Node(&n); err == nil {
+			t.Fatalf("accepted unsupported color %q", color)
+		}
+	}
+}

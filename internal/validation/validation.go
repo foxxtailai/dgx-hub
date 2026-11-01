@@ -25,6 +25,14 @@ func cleanText(s string, max int) bool {
 func Node(n *model.Node) error {
 	n.Name = strings.TrimSpace(n.Name)
 	n.SSHTarget = strings.TrimSpace(n.SSHTarget)
+	if n.Color == "" {
+		n.Color = "green"
+	}
+	switch n.Color {
+	case "green", "blue", "orange", "red", "yellow":
+	default:
+		return errors.New("node color must be green, blue, orange, red, or yellow")
+	}
 	if n.Name == "" || !cleanText(n.Name, 120) {
 		return errors.New("node name must contain 1–120 characters without control characters")
 	}

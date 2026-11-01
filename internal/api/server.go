@@ -210,6 +210,7 @@ func (s *Server) updateNode(w http.ResponseWriter, r *http.Request) {
 	if handleError(w, err) {
 		return
 	}
+	previous := n
 	if !decode(w, r, &n) {
 		return
 	}
@@ -222,11 +223,14 @@ func (s *Server) updateNode(w http.ResponseWriter, r *http.Request) {
 	if handleError(w, err) {
 		return
 	}
-	s.cancelLaunches(id, "")
-	s.actions.CancelNode(id)
-	s.tunnels.CloseNode(id)
-	s.metrics.Remove(id)
-	s.schedule(id)
+	// Changing only the display color must not interrupt running work.
+	if n.Name != previous.Name || n.SSHTarget != previous.SSHTarget || n.DataPath != previous.DataPath {
+		s.cancelLaunches(id, "")
+		s.actions.CancelNode(id)
+		s.tunnels.CloseNode(id)
+		s.metrics.Remove(id)
+		s.schedule(id)
+	}
 	jsonResponse(w, 200, n)
 }
 func (s *Server) deleteNode(w http.ResponseWriter, r *http.Request) {

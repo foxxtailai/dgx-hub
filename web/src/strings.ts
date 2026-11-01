@@ -13,6 +13,7 @@ export const t = {
   edit: 'Edit', remove: 'Delete', cancel: 'Cancel', save: 'Save changes', create: 'Add', saving: 'Saving…',
   name: 'Name', sshTarget: 'SSH target', sshTargetHint: 'An SSH alias, hostname, or user@host from your existing SSH setup.',
   nodeNamePlaceholder: 'e.g. Elly', sshTargetPlaceholder: 'e.g. elly or user@192.168.1.10',
+  nodeColor: 'Node color', nodeColors: { green: 'Light green', blue: 'Blue', orange: 'Orange', red: 'Red', yellow: 'Yellow' },
   dataPath: 'Data directory', optional: 'optional', dataPathHint: 'Shown as another disk only when it is on a separate filesystem.', dataPathPlaceholder: '/srv/ai',
   editNode: 'Edit node', newNode: 'Add a node', nodeFormDescription: 'Use the same SSH target you use in your terminal.',
   editService: 'Edit service', newService: 'Add a service', serviceFormDescription: 'The endpoint is reached from the remote node through SSH.',

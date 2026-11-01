@@ -169,12 +169,19 @@ func TestLocalAPISecurity(t *testing.T) {
 
 func TestCRUDAndProtectedServiceLaunch(t *testing.T) {
 	s, tm := setup(t)
-	w := request(s, "POST", "/api/nodes", `{"name":"Elly","ssh_target":"elly","data_path":"/srv/ai"}`, true)
+	w := request(s, "POST", "/api/nodes", `{"name":"Elly","ssh_target":"elly","data_path":"/srv/ai","color":"blue"}`, true)
 	if w.Code != 201 {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	var n model.Node
 	json.Unmarshal(w.Body.Bytes(), &n)
+	if n.Color != "blue" {
+		t.Fatalf("node color not returned: %+v", n)
+	}
+	w = request(s, "PATCH", "/api/nodes/"+n.ID, `{"color":"yellow"}`, true)
+	if w.Code != 200 || tm.closedNode != "" {
+		t.Fatal("color change interrupted tunnels", w.Code, w.Body.String())
+	}
 	w = request(s, "POST", "/api/services", `{"name":"Web","node_id":"`+n.ID+`","remote_host":"127.0.0.1","remote_port":8840,"scheme":"http","path":"/"}`, true)
 	if w.Code != 201 {
 		t.Fatal(w.Code, w.Body.String())
@@ -203,7 +210,7 @@ func TestCRUDAndProtectedServiceLaunch(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	updated, err := s.store.Node(n.ID)
-	if err != nil || updated.SSHTarget != "elly" {
+	if err != nil || updated.SSHTarget != "elly" || updated.Color != "yellow" {
 		t.Fatal("PATCH lost existing fields")
 	}
 	w = request(s, "DELETE", "/api/nodes/"+n.ID, "", true)
@@ -218,7 +225,7 @@ func TestCRUDAndProtectedServiceLaunch(t *testing.T) {
 
 func TestRejectUnsafeInputAndGuideAuthFailure(t *testing.T) {
 	s, _ := setup(t)
-	for _, body := range []string{`{"name":"bad","ssh_target":"-oProxyCommand=bad"}`, `{"name":"bad","ssh_target":"elly","command":"rm"}`, `{"name":"bad","ssh_target":"elly"} {}`} {
+	for _, body := range []string{`{"name":"bad","ssh_target":"-oProxyCommand=bad"}`, `{"name":"bad","ssh_target":"elly","command":"rm"}`, `{"name":"bad","ssh_target":"elly","color":"purple"}`, `{"name":"bad","ssh_target":"elly"} {}`} {
 		if w := request(s, "POST", "/api/nodes", body, true); w.Code != 400 {
 			t.Fatal(w.Code, w.Body.String())
 		}

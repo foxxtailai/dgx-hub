@@ -5,6 +5,7 @@ import "time"
 type Node struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
+	Color     string `json:"color"`
 	SSHTarget string `json:"ssh_target"`
 	DataPath  string `json:"data_path"`
 }

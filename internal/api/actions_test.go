@@ -198,6 +198,15 @@ func TestActionAPIAvailabilityBusyCancelAndNodeEdit(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("second mock not started")
 	}
+	w = request(s, "PATCH", "/api/nodes/"+n.ID, `{"color":"red"}`, true)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	w = request(s, "GET", "/api/action-runs/"+run.ID, "", false)
+	var active model.ActionRun
+	if err := json.Unmarshal(w.Body.Bytes(), &active); err != nil || active.Status != "running" {
+		t.Fatal("color change interrupted action", w.Body.String(), err)
+	}
 	w = request(s, "PATCH", "/api/nodes/"+n.ID, `{"name":"Renamed"}`, true)
 	if w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())

@@ -20,6 +20,8 @@ On the first normal launch, DGX Hub imports the existing `%LOCALAPPDATA%\FoxHub\
 
 Closing the browser leaves DGX Hub and its tunnels running. Choose **Exit** in the tray menu to stop DGX Hub and close its managed background SSH processes. Interactive terminal sessions belong to the user and can be closed normally.
 
+Choose a **Node color** when adding or editing a node: light green, blue, orange, red or yellow. The saved color identifies the node on its card, beside services and in SSH setup and Actions. Existing nodes start with light green. Changing only the color keeps active tunnels and actions running; Online/Offline indicators continue to show connection status.
+
 ## SSH configuration and first connection
 
 DGX Hub uses the current Windows user's system OpenSSH, SSH configuration, keys, and agent. It does not ask for passwords in the browser or store keys/passwords in its database.

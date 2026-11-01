@@ -28,13 +28,17 @@ func Open(path string) (*Store, error) {
 	db.SetMaxOpenConns(1)
 	s := &Store{db: db}
 	_, err = db.Exec(`PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;
-	CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, name TEXT NOT NULL, ssh_target TEXT NOT NULL, data_path TEXT NOT NULL DEFAULT '');
+	CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, name TEXT NOT NULL, ssh_target TEXT NOT NULL, data_path TEXT NOT NULL DEFAULT '', color TEXT NOT NULL DEFAULT 'green');
 	CREATE TABLE IF NOT EXISTS services (id TEXT PRIMARY KEY, name TEXT NOT NULL, node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
 	remote_host TEXT NOT NULL, remote_port INTEGER NOT NULL CHECK(remote_port BETWEEN 1 AND 65535), scheme TEXT NOT NULL, path TEXT NOT NULL);
 	CREATE INDEX IF NOT EXISTS services_node ON services(node_id);`)
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("initialize database: %w", err)
+	}
+	if err = s.initNodeColors(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("initialize node colors: %w", err)
 	}
 	if err = s.initActions(); err != nil {
 		db.Close()
@@ -49,6 +53,18 @@ func Open(path string) (*Store, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
+func (s *Store) initNodeColors() error {
+	var columns int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('nodes') WHERE name='color'").Scan(&columns); err != nil {
+		return err
+	}
+	if columns == 0 {
+		_, err := s.db.Exec("ALTER TABLE nodes ADD COLUMN color TEXT NOT NULL DEFAULT 'green'")
+		return err
+	}
+	return nil
+}
+
 func newID() string {
 	var id [16]byte
 	if _, err := rand.Read(id[:]); err != nil {
@@ -58,7 +74,7 @@ func newID() string {
 }
 
 func (s *Store) Nodes() ([]model.Node, error) {
-	rows, err := s.db.Query("SELECT id,name,ssh_target,data_path FROM nodes ORDER BY name COLLATE NOCASE,id")
+	rows, err := s.db.Query("SELECT id,name,ssh_target,data_path,color FROM nodes ORDER BY name COLLATE NOCASE,id")
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +82,7 @@ func (s *Store) Nodes() ([]model.Node, error) {
 	nodes := []model.Node{}
 	for rows.Next() {
 		var n model.Node
-		if err := rows.Scan(&n.ID, &n.Name, &n.SSHTarget, &n.DataPath); err != nil {
+		if err := rows.Scan(&n.ID, &n.Name, &n.SSHTarget, &n.DataPath, &n.Color); err != nil {
 			return nil, err
 		}
 		nodes = append(nodes, n)
@@ -76,7 +92,7 @@ func (s *Store) Nodes() ([]model.Node, error) {
 
 func (s *Store) Node(id string) (model.Node, error) {
 	var n model.Node
-	err := s.db.QueryRow("SELECT id,name,ssh_target,data_path FROM nodes WHERE id=?", id).Scan(&n.ID, &n.Name, &n.SSHTarget, &n.DataPath)
+	err := s.db.QueryRow("SELECT id,name,ssh_target,data_path,color FROM nodes WHERE id=?", id).Scan(&n.ID, &n.Name, &n.SSHTarget, &n.DataPath, &n.Color)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -84,12 +100,15 @@ func (s *Store) Node(id string) (model.Node, error) {
 }
 
 func (s *Store) SaveNode(n model.Node, create bool) (model.Node, error) {
+	if n.Color == "" {
+		n.Color = "green"
+	}
 	if create {
 		n.ID = newID()
-		_, err := s.db.Exec("INSERT INTO nodes(id,name,ssh_target,data_path) VALUES(?,?,?,?)", n.ID, n.Name, n.SSHTarget, n.DataPath)
+		_, err := s.db.Exec("INSERT INTO nodes(id,name,ssh_target,data_path,color) VALUES(?,?,?,?,?)", n.ID, n.Name, n.SSHTarget, n.DataPath, n.Color)
 		return n, err
 	}
-	result, err := s.db.Exec("UPDATE nodes SET name=?,ssh_target=?,data_path=? WHERE id=?", n.Name, n.SSHTarget, n.DataPath, n.ID)
+	result, err := s.db.Exec("UPDATE nodes SET name=?,ssh_target=?,data_path=?,color=? WHERE id=?", n.Name, n.SSHTarget, n.DataPath, n.Color, n.ID)
 	return n, changed(result, err)
 }
 

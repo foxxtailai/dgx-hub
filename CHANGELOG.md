@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Five saved node colors (light green, blue, orange, red and yellow), shown on node cards, service node names, SSH setup and Actions. Existing nodes default to light green; changing only the color preserves active work.
 - Shared Node Actions catalogue with reusable node assignments and an ordered multiline command editor.
 - Sequential noninteractive SSH execution with per-step timeout, stop/continue policy, live output, cancellation and one active action per node.
 - Persistent run history with command/name snapshots, exit codes and bounded stdout/stderr; interrupted runs recover as Cancelled.

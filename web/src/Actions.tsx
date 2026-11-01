@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api } from './api';
 import { Modal } from './Modal';
+import { NodeName } from './NodeName';
 import { t } from './strings';
 import type { Action, ActionInput, ActionRun, ActionStep, Node } from './types';
 
@@ -38,7 +39,7 @@ function ActionForm({ action, node, nodes, onSave, onBack }: { action?: Action; 
       </section>)}</div>
       <button type="button" className="button button-secondary" disabled={value.steps.length >= 50} onClick={() => setValue(current => ({ ...current, steps: [...current.steps, freshStep()] }))}>+ {t.addStep}</button>
       <div className="action-section-heading action-assignment-heading"><h3>{t.assignedNodes}</h3></div>
-      <div className="action-node-picker">{nodes.map(item => <label className="action-checkbox" key={item.id}><input type="checkbox" checked={value.node_ids.includes(item.id)} onChange={event => setValue(current => ({ ...current, node_ids: event.target.checked ? [...current.node_ids, item.id] : current.node_ids.filter(id => id !== item.id) }))} /><span>{item.name}<code>{item.ssh_target}</code></span></label>)}</div>
+      <div className="action-node-picker">{nodes.map(item => <label className="action-checkbox" key={item.id}><input type="checkbox" checked={value.node_ids.includes(item.id)} onChange={event => setValue(current => ({ ...current, node_ids: event.target.checked ? [...current.node_ids, item.id] : current.node_ids.filter(id => id !== item.id) }))} /><span><NodeName node={item} /><code>{item.ssh_target}</code></span></label>)}</div>
       {!value.node_ids.length && <p className="hint">{t.noAssignedNodes}</p>}
       <label className="action-checkbox action-confirm-toggle"><input type="checkbox" checked={value.confirm_before_run} onChange={event => setValue(current => ({ ...current, confirm_before_run: event.target.checked }))} /><span>{t.confirmBeforeRun}</span></label>
     </fieldset>
@@ -54,11 +55,11 @@ function runLogs(run: ActionRun) {
       `${t.stdout}:\n${step.stdout}${step.stdout_truncated ? `\n[${t.outputTruncated}]` : ''}`, `${t.stderr}:\n${step.stderr}${step.stderr_truncated ? `\n[${t.outputTruncated}]` : ''}`].filter(Boolean).join('\n'))].filter(Boolean).join('\n\n');
 }
 
-function RunDetail({ run, busy, onCancel }: { run: ActionRun; busy: boolean; onCancel: () => void }) {
+function RunDetail({ run, node, busy, onCancel }: { run: ActionRun; node?: Node; busy: boolean; onCancel: () => void }) {
   const [copyState, setCopyState] = useState('');
   const currentStep = run.steps.findIndex(step => step.status === 'running');
   return <div className="action-run-detail">
-    <div className="action-run-heading"><div><h3>{run.action_name}</h3><p>{run.node_name}</p></div><span className={`action-status action-status-${run.status}`} role="status">{statusLabel(run.status)}</span></div>
+    <div className="action-run-heading"><div><h3>{run.action_name}</h3><p><NodeName node={node} fallback={run.node_name} /></p></div><span className={`action-status action-status-${run.status}`} role="status">{statusLabel(run.status)}</span></div>
     <dl className="action-run-metadata"><div><dt>{t.startedAt}</dt><dd>{new Date(run.started_at).toLocaleString()}</dd></div><div><dt>{t.duration}</dt><dd>{elapsed(run.duration_ms, run.started_at, run.status === 'running')}</dd></div>{run.finished_at && <div><dt>{t.finishedAt}</dt><dd>{new Date(run.finished_at).toLocaleString()}</dd></div>}</dl>
     <div className="action-run-controls"><button className="button button-secondary" onClick={async () => { try { await navigator.clipboard.writeText(runLogs(run)); setCopyState(t.logsCopied); } catch { setCopyState(t.copyLogsFailed); } }}>{t.copyLogs}</button>{run.status === 'running' && <button className="button button-danger" disabled={busy} onClick={onCancel}>{busy ? t.cancelling : t.cancelRun}</button>}</div>
     {copyState && <p className="hint action-copy-feedback" role="status">{copyState}</p>}
@@ -148,7 +149,7 @@ export function NodeActions({ node, nodes, online, onClose }: { node: Node; node
       if (alive.current) { setActions(current => [...current.filter(action => action.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name))); navigate({ kind: 'list' }); }
     } finally { operation.current = false; if (alive.current) setBusy(false); }
   }
-  const title = view.kind === 'edit' ? view.action ? t.editAction : t.newAction : view.kind === 'confirm' ? t.confirmRun : view.kind === 'delete' ? t.deleteAction : view.kind === 'history' ? `${t.history}${view.action ? ` · ${view.action.name}` : ''}` : view.kind === 'run' ? t.runDetails : `${node.name} · ${t.actions}`;
+  const title = view.kind === 'edit' ? view.action ? t.editAction : t.newAction : view.kind === 'confirm' ? t.confirmRun : view.kind === 'delete' ? t.deleteAction : view.kind === 'history' ? `${t.history}${view.action ? ` · ${view.action.name}` : ''}` : view.kind === 'run' ? t.runDetails : <><NodeName node={node} /> · {t.actions}</>;
   const description = view.kind === 'edit' ? t.actionFormDescription : view.kind === 'confirm' ? t.confirmRunDescription : view.kind === 'history' ? t.actionHistoryDescription : view.kind === 'list' ? t.nodeActionsDescription : undefined;
   return <Modal title={title} description={description} onClose={close} wide>
     {error && <div className="form-error action-panel-error" role="alert">{error}<button className="button button-quiet" disabled={busy} onClick={() => void load()}>{t.refresh}</button></div>}
@@ -164,9 +165,9 @@ export function NodeActions({ node, nodes, online, onClose }: { node: Node; node
       </>}
       {view.kind === 'edit' && <ActionForm key={view.action?.id || 'new'} action={view.action} node={node} nodes={nodes} onSave={save} onBack={() => navigate({ kind: 'list' })} />}
       {view.kind === 'delete' && <><div className="delete-content"><div className="delete-target"><strong>{view.action.name}</strong></div><p>{t.deleteActionDescription}</p></div><div className="modal-footer"><button className="button button-secondary" disabled={busy} onClick={() => navigate({ kind: 'list' })}>{t.cancel}</button><button className="button button-danger" disabled={busy} onClick={() => void mutate(async () => { await api(`/api/actions/${view.action.id}`, 'DELETE'); if (alive.current) { setActions(current => current.filter(action => action.id !== view.action.id)); navigate({ kind: 'list' }); } })}>{busy ? t.deleting : t.remove}</button></div></>}
-      {view.kind === 'confirm' && <><div className="delete-target"><strong>{view.action.name}</strong><span>→ {node.name}</span></div><ol className="action-confirm-steps">{view.action.steps.map((step, index) => <li key={index}>{step.name && <strong>{step.name}</strong>}<pre className="action-command-preview">{step.command}</pre></li>)}</ol>{!online && <p className="action-node-warning">{t.offlineAction}</p>}<div className="modal-footer"><button className="button button-secondary" disabled={busy} onClick={() => navigate({ kind: 'list' })}>{t.cancel}</button><button className="button button-primary" disabled={busy || !online || !!activeRun} onClick={() => void start(view.action, true)}>{busy ? t.runningAction : t.run}</button></div></>}
+      {view.kind === 'confirm' && <><div className="delete-target"><strong>{view.action.name}</strong><span>→ <NodeName node={node} /></span></div><ol className="action-confirm-steps">{view.action.steps.map((step, index) => <li key={index}>{step.name && <strong>{step.name}</strong>}<pre className="action-command-preview">{step.command}</pre></li>)}</ol>{!online && <p className="action-node-warning">{t.offlineAction}</p>}<div className="modal-footer"><button className="button button-secondary" disabled={busy} onClick={() => navigate({ kind: 'list' })}>{t.cancel}</button><button className="button button-primary" disabled={busy || !online || !!activeRun} onClick={() => void start(view.action, true)}>{busy ? t.runningAction : t.run}</button></div></>}
       {view.kind === 'history' && <><div className="action-panel-toolbar"><button className="button button-secondary" onClick={() => navigate({ kind: 'list' })}>← {t.backToActions}</button><button className="button button-quiet" onClick={() => void load()}>{t.refresh}</button></div><div className="action-history">{runs.filter(run => !view.action || run.action_id === view.action.id).map(run => <button className="action-history-row" key={run.id} onClick={() => navigate({ kind: 'run', id: run.id })}><span><strong>{run.action_name}</strong><time dateTime={run.started_at}>{new Date(run.started_at).toLocaleString()}</time></span><span className={`action-status action-status-${run.status}`}>{statusLabel(run.status)}</span><span>{elapsed(run.duration_ms, run.started_at, run.status === 'running')}</span></button>)}{!runs.some(run => !view.action || run.action_id === view.action.id) && <p className="action-empty">{t.historyEmpty}</p>}</div></>}
-      {view.kind === 'run' && <><div className="action-panel-toolbar"><button className="button button-secondary" onClick={() => navigate({ kind: 'list' })}>← {t.backToActions}</button><button className="button button-quiet" onClick={() => navigate({ kind: 'history' })}>{t.history}</button></div>{selectedRun && detailID === selectedRun.id ? <RunDetail key={selectedRun.id} run={selectedRun} busy={busy} onCancel={() => void mutate(async () => { const run = await api<ActionRun>(`/api/action-runs/${selectedRun.id}/cancel`, 'POST'); if (alive.current) updateRun(run); })} /> : <p className="hint" role="status">{t.statusLoading}…</p>}</>}
+      {view.kind === 'run' && <><div className="action-panel-toolbar"><button className="button button-secondary" onClick={() => navigate({ kind: 'list' })}>← {t.backToActions}</button><button className="button button-quiet" onClick={() => navigate({ kind: 'history' })}>{t.history}</button></div>{selectedRun && detailID === selectedRun.id ? <RunDetail key={selectedRun.id} run={selectedRun} node={nodes.find(item => item.id === selectedRun.node_id)} busy={busy} onCancel={() => void mutate(async () => { const run = await api<ActionRun>(`/api/action-runs/${selectedRun.id}/cancel`, 'POST'); if (alive.current) updateRun(run); })} /> : <p className="hint" role="status">{t.statusLoading}…</p>}</>}
     </>}
   </Modal>;
 }

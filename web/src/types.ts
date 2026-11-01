@@ -1,4 +1,5 @@
-export interface Node { id: string; name: string; ssh_target: string; data_path: string }
+export type NodeColor = 'green' | 'blue' | 'orange' | 'red' | 'yellow';
+export interface Node { id: string; name: string; color: NodeColor; ssh_target: string; data_path: string }
 export interface Service { id: string; name: string; node_id: string; remote_host: string; remote_port: number; scheme: string; path: string }
 export interface Memory { used: number; total: number; percent: number }
 export interface Disk extends Memory { path: string; mount: string }
