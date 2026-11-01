@@ -36,6 +36,10 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("initialize database: %w", err)
 	}
+	if err = s.initActions(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("initialize actions: %w", err)
+	}
 	if err = os.Chmod(path, 0600); err != nil {
 		db.Close()
 		return nil, err

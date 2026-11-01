@@ -99,6 +99,7 @@ func run() (runErr error) {
 	manager := tunnels.New()
 	defer manager.Close()
 	app := api.New(store, telemetry.New(), manager, address, assets, version)
+	defer app.Close()
 	app.Start(ctx)
 	server := &http.Server{Handler: app, BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 40 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	serverErrors := make(chan error, 1)
@@ -117,6 +118,7 @@ func run() (runErr error) {
 		cancel()
 	}
 	cancel()
+	app.Close()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	if shutdownErr := server.Shutdown(shutdownCtx); shutdownErr != nil {

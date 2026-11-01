@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { api, getSession } from './api';
 import { t } from './strings';
+import { Modal } from './Modal';
+import { NodeActions } from './Actions';
 import type { Metrics, Node, NodeInput, Service, ServiceInput, Session, SSHCheck, TerminalResult } from './types';
 
 type IconName = 'plus' | 'grid' | 'server' | 'link' | 'terminal' | 'arrow' | 'edit' | 'trash' | 'close' | 'refresh' | 'shield' | 'copy' | 'check' | 'alert' | 'chevron';
@@ -34,20 +36,6 @@ function endpoint(service: Service) {
   return `${service.scheme}://${host}:${service.remote_port}${service.path || '/'}`;
 }
 
-function Modal({ title, description, onClose, children, wide = false }: { title: string; description?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleID = useId(); const descriptionID = useId();
-  useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
-  return <dialog ref={ref} className={`modal ${wide ? 'modal-wide' : ''}`} aria-labelledby={titleID} aria-describedby={description ? descriptionID : undefined} onCancel={event => { event.preventDefault(); onClose(); }} onClick={event => {
-    if (event.target !== event.currentTarget) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose();
-  }}>
-    <div className="modal-header"><div><h2 id={titleID}>{title}</h2>{description && <p id={descriptionID}>{description}</p>}</div><button className="icon-button" onClick={onClose} aria-label={t.close}><Icon name="close" /></button></div>
-    {children}
-  </dialog>;
-}
-
 function CopyCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false); const [failed, setFailed] = useState(false);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -63,7 +51,7 @@ function Meter({ label, value, detail, error }: { label: string; value: number |
   return <div className="metric" title={error || detail}><div className="metric-label"><span>{label}</span><strong>{percent(value)}</strong></div><div className={`meter ${!valid ? 'meter-empty' : ''}`} aria-hidden="true"><progress max={100} value={valid ? Math.min(100, Math.max(0, value)) : 0} /></div>{detail && <div className="metric-detail">{detail}</div>}</div>;
 }
 
-function NodeCard({ node, metrics, onEdit, onDelete, onSetup, onTerminal }: { node: Node; metrics?: Metrics; onEdit: () => void; onDelete: () => void; onSetup: () => void; onTerminal: () => void }) {
+function NodeCard({ node, metrics, onEdit, onDelete, onSetup, onTerminal, onActions }: { node: Node; metrics?: Metrics; onEdit: () => void; onDelete: () => void; onSetup: () => void; onTerminal: () => void; onActions: () => void }) {
   const status = metrics?.status || 'connecting';
   const errors = Object.entries(metrics?.errors || {}).filter(([field, value]) => field !== 'ssh_code' && value);
   const needsSetup = ['authentication_required', 'host_key_required', 'ssh_missing', 'ssh_config_error'].includes(metrics?.errors?.ssh_code || '');
@@ -76,7 +64,7 @@ function NodeCard({ node, metrics, onEdit, onDelete, onSetup, onTerminal }: { no
     {metrics?.disks?.length ? metrics.disks.map(disk => <Meter key={`${disk.mount}:${disk.path}`} label={`${t.disk} · ${disk.path}`} value={disk.percent} detail={`${bytes(disk.used)} / ${bytes(disk.total)}`} />) : <Meter label={`${t.disk} · /`} value={null} error={metrics?.errors?.disk} />}
     <div className="node-reading"><span title={when?.toLocaleString('en-US')}>{metrics?.stale ? <><Icon name="alert" size={12} />{t.stale}</> : when ? `${t.lastSuccess} ${when.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}` : t.noReading}</span></div>
     {errors.length > 0 && <details className="metric-errors"><summary>{needsSetup ? t.setupRequired : t.metricErrors}<Icon name="chevron" size={14} /></summary><ul>{errors.map(([field, message]) => <li key={field}><span>{field}</span>{message}</li>)}</ul></details>}
-    <div className="node-actions"><button className="button button-secondary terminal-button" onClick={onTerminal}><Icon name="terminal" size={16} />{t.terminal}</button><button className={`button button-quiet ${needsSetup ? 'setup-highlight' : ''}`} onClick={onSetup} title={t.checkConnection}>{t.setup}</button><div className="node-edit-actions"><button className="icon-button" onClick={onEdit} aria-label={`${t.edit} ${node.name}`} title={t.edit}><Icon name="edit" size={15} /></button><button className="icon-button danger-hover" onClick={onDelete} aria-label={`${t.remove} ${node.name}`} title={t.remove}><Icon name="trash" size={15} /></button></div></div>
+    <div className="node-actions"><button className="button button-secondary terminal-button" onClick={onTerminal}><Icon name="terminal" size={16} />{t.terminal}</button><button className="button button-secondary" onClick={onActions}>{t.actions}</button><button className={`button button-quiet ${needsSetup ? 'setup-highlight' : ''}`} onClick={onSetup} title={t.checkConnection}>{t.setup}</button><div className="node-edit-actions"><button className="icon-button" onClick={onEdit} aria-label={`${t.edit} ${node.name}`} title={t.edit}><Icon name="edit" size={15} /></button><button className="icon-button danger-hover" onClick={onDelete} aria-label={`${t.remove} ${node.name}`} title={t.remove}><Icon name="trash" size={15} /></button></div></div>
   </article>;
 }
 
@@ -146,7 +134,7 @@ function SSHGuide({ node, onClose, onTerminal, onChecked }: { node: Node; onClos
   </Modal>;
 }
 
-type Editor = { type: 'node'; node?: Node } | { type: 'service'; service?: Service } | { type: 'delete-node'; node: Node } | { type: 'delete-service'; service: Service } | { type: 'setup'; node: Node };
+type Editor = { type: 'node'; node?: Node } | { type: 'service'; service?: Service } | { type: 'delete-node'; node: Node } | { type: 'delete-service'; service: Service } | { type: 'setup'; node: Node } | { type: 'actions'; node: Node };
 type Notice = { text: string; error?: boolean; command?: string };
 
 export default function App() {
@@ -217,7 +205,7 @@ export default function App() {
         {connectionError && <div className="connection-error" role="alert"><Icon name="alert" size={18} /><span>{connectionError}</span><button className="button button-quiet" onClick={() => void refresh()}>{t.refresh}</button></div>}
         {loading ? <div className="workspace-loading" role="status"><Icon name="refresh" className="spin" size={24} /><span>{t.loading}</span></div> : <>
           <section id="nodes" className="section"><div className="section-heading"><div className="section-title"><div><h2>{t.nodes}<span className="count">{nodes.length}</span></h2><p>{t.nodesDescription}</p></div>{nodes.length > 0 && <span className="section-stat"><i className={online ? 'dot-online' : ''} />{online}/{nodes.length} {t.connected}</span>}</div><button className="button button-primary" onClick={() => openEditor({ type: 'node' })}><Icon name="plus" size={17} />{t.addNode}</button></div>
-            {nodes.length ? <div className="nodes-grid">{nodes.map(node => <NodeCard key={node.id} node={node} metrics={metrics[node.id]} onEdit={() => openEditor({ type: 'node', node })} onDelete={() => openEditor({ type: 'delete-node', node })} onSetup={() => openEditor({ type: 'setup', node })} onTerminal={() => void terminal(node)} />)}</div> : <div className="empty-state"><div className="empty-art"><Icon name="server" size={34} /><span>+</span></div><h3>{t.noNodesTitle}</h3><p>{t.noNodesDescription}</p><button className="button button-secondary" onClick={() => openEditor({ type: 'node' })}><Icon name="plus" size={16} />{t.addNode}</button></div>}
+            {nodes.length ? <div className="nodes-grid">{nodes.map(node => <NodeCard key={node.id} node={node} metrics={metrics[node.id]} onEdit={() => openEditor({ type: 'node', node })} onDelete={() => openEditor({ type: 'delete-node', node })} onSetup={() => openEditor({ type: 'setup', node })} onTerminal={() => void terminal(node)} onActions={() => openEditor({ type: 'actions', node })} />)}</div> : <div className="empty-state"><div className="empty-art"><Icon name="server" size={34} /><span>+</span></div><h3>{t.noNodesTitle}</h3><p>{t.noNodesDescription}</p><button className="button button-secondary" onClick={() => openEditor({ type: 'node' })}><Icon name="plus" size={16} />{t.addNode}</button></div>}
           </section>
           <section id="services" className="section services-section"><div className="section-heading"><div className="section-title"><div><h2>{t.services}<span className="count">{services.length}</span></h2><p>{t.servicesDescription}</p></div></div><button className="button button-secondary" disabled={!nodes.length} title={!nodes.length ? t.addNodeFirst : undefined} onClick={() => openEditor({ type: 'service' })}><Icon name="plus" size={17} />{t.addService}</button></div>
             {services.length ? <div className="services-table"><div className="service-table-head"><span>{t.name}</span><span>{t.node}</span><span>{t.endpoint}</span><span className="sr-only">{t.actions}</span></div>{services.map(service => {
@@ -232,6 +220,7 @@ export default function App() {
     {editor?.type === 'node' && <NodeForm node={editor.node} onClose={() => setEditor(undefined)} onSave={saveNode} />}
     {editor?.type === 'service' && <ServiceForm service={editor.service} nodes={nodes} onClose={() => setEditor(undefined)} onSave={saveService} />}
     {editor?.type === 'setup' && <SSHGuide node={editor.node} onClose={() => setEditor(undefined)} onTerminal={() => void terminal(editor.node)} onChecked={afterCheck} />}
+    {editor?.type === 'actions' && <NodeActions node={nodes.find(node => node.id === editor.node.id) || editor.node} nodes={nodes} online={metrics[editor.node.id]?.status === 'online' && !metrics[editor.node.id]?.stale} onClose={() => setEditor(undefined)} />}
     {(editor?.type === 'delete-node' || editor?.type === 'delete-service') && <Modal title={editor.type === 'delete-node' ? t.deleteNodeTitle : t.deleteServiceTitle} onClose={() => !deleting && setEditor(undefined)}><div className="delete-content"><div className="delete-target"><Icon name={editor.type === 'delete-node' ? 'server' : 'link'} /><strong>{editor.type === 'delete-node' ? editor.node.name : editor.service.name}</strong></div><p>{editor.type === 'delete-node' ? deleteServices.length ? t.deleteNodeDescription : t.deleteNodeEmptyDescription : t.deleteServiceDescription}</p>{deleteServices.length > 0 && <ul className="delete-services">{deleteServices.map(service => <li key={service.id}><Icon name="link" size={14} />{service.name}</li>)}</ul>}<p className="hint">{t.remoteUnaffected}</p>{deleteError && <div role="alert" className="form-error">{deleteError}</div>}</div><div className="modal-footer"><button className="button button-secondary" disabled={deleting} onClick={() => setEditor(undefined)}>{t.cancel}</button><button className="button button-danger" disabled={deleting} onClick={() => void remove()}>{deleting ? t.deleting : t.remove}</button></div></Modal>}
     {notice && <div className={`toast ${notice.error ? 'toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><Icon name={notice.error ? 'alert' : 'check'} size={19} /><div><p>{notice.text}</p>{notice.command && <CopyCommand command={notice.command} />}</div><button className="icon-button" aria-label={t.dismiss} onClick={() => setNotice(undefined)}><Icon name="close" size={16} /></button></div>}
   </div>;

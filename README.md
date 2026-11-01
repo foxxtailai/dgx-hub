@@ -2,7 +2,7 @@
 
 DGX Hub is a local dashboard for DGX Spark nodes. It shows live Linux metrics, opens an SSH terminal, and opens saved web services through managed loopback SSH tunnels.
 
-The current desktop target is **Windows 10/11 amd64**. Linux stays separate in the platform layer; its desktop integration is deferred. See `TESTING.md` for what was actually verified.
+The current desktop target is **Windows 10/11 amd64**. Linux stays separate in the platform layer; its desktop integration is deferred. See `.localFiles/TESTING.md` for what was actually verified.
 
 [Changelog](CHANGELOG.md) · [Verification report](.localFiles/TESTING.md) · [Project specification](.localFiles/DGXHub_Spec.md)
 
@@ -68,6 +68,24 @@ HTTP and HTTPS are supported. DGX Hub does not bypass HTTPS certificate checks, 
 
 RAM is shown once as shared system memory; GPU activity is separate and displays **N/A** if unsupported. CPU is calculated from two `/proc/stat` snapshots. Memory uses `MemTotal - MemAvailable`; disks on the same mount are shown once. Failed polls retain previous readings marked stale.
 
+## Node Actions
+
+Choose **Actions** beside **Terminal** on a node card, then **Create action**. Set a name and optional description, enter one or more commands, and select the nodes that should share the definition. Actions belong to a central local catalogue: **Assign** adds an existing action to another node, and editing it updates the shared definition. An action can also remain unassigned in the catalogue. No example actions are installed automatically.
+
+Each action supports up to 50 steps. Commands use multiline monospace fields; the arrow buttons change their order. Every step has a timeout (60 seconds by default, configurable from 1 to 86400) and an error policy. **Stop sequence** is the default; **Continue to next step** permits later commands after a failed command or timeout. The overall result still reports Failed if any step failed. SSH connection/setup failures always stop the sequence; OpenSSH exit code 255 is treated conservatively as a connection failure.
+
+**Run** is available only when the selected node has current Online metrics. Enable **Ask for confirmation before running** to review the commands and destination before launch. Only one action can run on a node at a time; different nodes can run independently. Opening, editing, assigning, and saving an action never runs its commands. The regular terminal, telemetry and service tunnels use their existing independent lifecycle.
+
+Each step uses a fresh system OpenSSH process with the same SSH aliases, keys, agent and strict host-key verification as other background operations. The remote command runs in `/bin/sh`, starting in `$HOME`, with a fixed environment: `HOME`, `USER`, `LOGNAME`, `PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`, and `LANG=C`. Shell profiles are not loaded, and `cd`, exported variables and shell state do not carry to the next step. Set custom environment variables or combine related operations inside one command when needed. Standard input is closed and no terminal is allocated; use noninteractive commands such as `sudo -n` so missing privileges produce an error instead of a password prompt.
+
+The execution screen shows each command, status, elapsed time, exit code, stdout and stderr. Active output refreshes approximately every half second. **Copy logs** copies the complete retained result. Close the panel and reopen Actions to find an active run, or use **Node history** / an action's **History** to inspect earlier results.
+
+**Cancel run**, a step timeout, node editing/deletion, and application exit close the managed local SSH operation. Remote processes that detach or ignore the closed SSH session may continue; cancellation cannot guarantee their termination. Check the remote state before retrying administrative work after a timeout or connection failure. Closing only the browser or Actions panel leaves execution running.
+
+Definitions and run snapshots are stored in the existing local `dgx-hub.db`; SSH passwords and keys are never copied into them. Commands and their output are saved as entered/generated, so keep credentials in the existing SSH agent/key setup. History preserves action/node names and command results at launch even after a definition or node is deleted. It retains the latest 100 completed runs globally, plus active runs. Each stdout/stderr stream is limited to 64 KiB and combined output to 1 MiB per run; truncation is displayed. Command snapshots, JSON encoding and SQLite add storage overhead to these raw-output limits. History lists load summaries, with detailed logs retrieved only when opened.
+
+Snapshots are saved before execution, at step boundaries, and on completion or normal cancellation. An abrupt process exit can lose the latest output from the current step; the next launch marks interrupted runs Cancelled instead of leaving them Running. If history cannot be saved, execution stops before starting further commands and reports the storage error. Actions provide explicit manual sequences; scheduling, branching and shared workflow state are outside this version.
+
 ## Data and diagnostics
 
 - Windows: `%LOCALAPPDATA%\DGXHub\dgx-hub.db` and `dgx-hub.log`.
@@ -125,4 +143,4 @@ DGX Hub's browser must be on the same PC as DGX Hub: service redirects point to 
 
 ## Project layout
 
-`cmd/dgx-hub` composes the application. `internal/api`, `storage`, `validation`, `sshutil`, `telemetry`, `tunnels`, and `platform` contain the corresponding small components. `web/src/strings.ts` keeps English UI copy separate for future localization.
+`cmd/dgx-hub` composes the application. `internal/api`, `actions`, `storage`, `validation`, `sshutil`, `telemetry`, `tunnels`, and `platform` contain the corresponding small components. `web/src/strings.ts` keeps English UI copy separate for future localization.

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Shared Node Actions catalogue with reusable node assignments and an ordered multiline command editor.
+- Sequential noninteractive SSH execution with per-step timeout, stop/continue policy, live output, cancellation and one active action per node.
+- Persistent run history with command/name snapshots, exit codes and bounded stdout/stderr; interrupted runs recover as Cancelled.
+- Actions panels match the dashboard theme and include confirmation, history details and log copying. Existing terminal, monitoring and tunnel checks remain covered.
+
 ## 0.1.2 — 2026-10-27
 
 - Local Go application with embedded React/TypeScript UI and SQLite storage.

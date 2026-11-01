@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"dgx-hub/internal/actions"
 	"dgx-hub/internal/model"
 	"dgx-hub/internal/platform"
 	"dgx-hub/internal/sshutil"
@@ -39,6 +40,7 @@ type Server struct {
 	store                               *storage.Store
 	metrics                             Collector
 	tunnels                             TunnelManager
+	actions                             *actions.Manager
 	host, origin, csrf, launch, version string
 	assets                              fs.FS
 	mux                                 *http.ServeMux
@@ -60,6 +62,7 @@ const contentPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; 
 
 func New(store *storage.Store, metrics Collector, tunnels TunnelManager, host string, assets fs.FS, version string) *Server {
 	s := &Server{store: store, metrics: metrics, tunnels: tunnels, host: host, origin: "http://" + host, csrf: token(), launch: token(), version: version, assets: assets, mux: http.NewServeMux(), queue: make(chan string, 128), launches: make(map[*pendingLaunch]struct{}), check: sshutil.Check, terminal: platform.LaunchTerminal}
+	s.actions = actions.New(store, nil)
 	s.routes()
 	return s
 }
@@ -116,6 +119,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PATCH /api/services/{id}", s.updateService)
 	s.mux.HandleFunc("DELETE /api/services/{id}", s.deleteService)
 	s.mux.HandleFunc("GET /services/{id}/open", s.openService)
+	s.actionRoutes()
 	s.mux.HandleFunc("/", s.frontend)
 }
 
@@ -154,7 +158,8 @@ func (s *Server) Start(ctx context.Context) {
 		}
 	}()
 }
-func (s *Server) Wait() { s.wg.Wait() }
+func (s *Server) Wait()  { s.wg.Wait() }
+func (s *Server) Close() { s.actions.Close() }
 func (s *Server) schedule(id string) {
 	select {
 	case s.queue <- id:
@@ -218,6 +223,7 @@ func (s *Server) updateNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cancelLaunches(id, "")
+	s.actions.CancelNode(id)
 	s.tunnels.CloseNode(id)
 	s.metrics.Remove(id)
 	s.schedule(id)
@@ -231,6 +237,7 @@ func (s *Server) deleteNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cancelLaunches(id, "")
+	s.actions.CancelNode(id)
 	s.tunnels.CloseNode(id)
 	s.metrics.Remove(id)
 	w.WriteHeader(204)
@@ -440,11 +447,14 @@ func (s *Server) frontend(w http.ResponseWriter, r *http.Request) {
 }
 
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
+	return decodeLimit(w, r, v, 32<<10)
+}
+func decodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
 	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
 		fail(w, 415, "send application/json")
 		return false
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {

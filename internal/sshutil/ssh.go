@@ -1,5 +1,5 @@
-// Package sshutil runs the current user's system OpenSSH client. It never accepts
-// a shell command supplied by an HTTP caller.
+// Package sshutil runs the current user's system OpenSSH client. Monitoring and
+// tunnels use fixed scripts; Actions run explicitly saved user-authored commands.
 package sshutil
 
 import (
@@ -273,8 +273,7 @@ func Check(ctx context.Context, target string) model.SSHCheck {
 	return result
 }
 
-// ShellQuote is used only for a fixed application-owned remote script. User data
-// is sent on stdin and is never interpolated into this command.
+// ShellQuote preserves one string as a single remote POSIX shell argument.
 func ShellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
 
 const tcpProbeScript = `IFS= read -r remote_host
