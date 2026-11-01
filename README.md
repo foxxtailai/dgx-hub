@@ -62,7 +62,7 @@ The final check must finish without an interactive password, passphrase, or host
 
 ## Terminals and services
 
-Windows Terminal is preferred and opens an explicit new, visible window. An early activation failure triggers the native OpenSSH-console fallback and is recorded in `dgx-hub.log`. Commands use separate process arguments; a PowerShell command string is not constructed. If both launch methods fail, the UI shows the error and a copyable `ssh <target>` command.
+Windows Terminal is preferred and opens an explicit new, visible window with the tab colored to match the node. The tab color applies to each newly opened session and uses the same five-color palette as the dashboard. An early activation failure triggers the native OpenSSH-console fallback and is recorded in `dgx-hub.log`; that fallback keeps its usual appearance. Commands use separate process arguments; a PowerShell command string is not constructed. If both launch methods fail, the UI shows the error and a copyable `ssh <target>` command.
 
 Each service records the endpoint **as seen by its SSH node**. Two services on different nodes can use the same remote port. Local tunnel ports are allocated dynamically, kept only for this run, and bound to `127.0.0.1`. Editing or deleting a service closes its previous tunnel. Deleting a node also deletes its saved services after confirmation.
 

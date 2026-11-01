@@ -50,7 +50,7 @@ type Server struct {
 	queue                               chan string
 	wg                                  sync.WaitGroup
 	check                               func(context.Context, string) model.SSHCheck
-	terminal                            func(string) error
+	terminal                            func(string, string) error
 }
 
 type pendingLaunch struct {
@@ -286,7 +286,7 @@ func (s *Server) nodeTerminal(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, err.Error())
 		return
 	}
-	err = s.terminal(n.SSHTarget)
+	err = s.terminal(n.SSHTarget, n.Color)
 	result := map[string]any{"ok": err == nil, "command": "ssh " + n.SSHTarget}
 	if err != nil {
 		log.Printf("terminal launch for node %q failed: %v", n.ID, err)

@@ -20,13 +20,13 @@ type fakeMetrics struct{}
 
 func TestTerminalFailureReturnsCopyableCommand(t *testing.T) {
 	s, _ := setup(t)
-	n, err := s.store.SaveNode(model.Node{Name: "Test node", SSHTarget: "test-user@example.invalid"}, true)
+	n, err := s.store.SaveNode(model.Node{Name: "Test node", SSHTarget: "test-user@example.invalid", Color: "blue"}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.terminal = func(target string) error {
-		if target != n.SSHTarget {
-			t.Fatalf("wrong target: %s", target)
+	s.terminal = func(target, color string) error {
+		if target != n.SSHTarget || color != n.Color {
+			t.Fatalf("wrong terminal destination/color: %s %s", target, color)
 		}
 		return errors.New("terminal activation failed")
 	}

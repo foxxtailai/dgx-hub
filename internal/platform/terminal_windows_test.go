@@ -66,19 +66,27 @@ func TestWindowsTerminalCommandIsVisibleAndUsesNewWindow(t *testing.T) {
 	const terminal = `C:\WindowsApps\wt.exe`
 	const ssh = `C:\Program Files\OpenSSH\ssh.exe`
 	const target = "test-user@example.invalid"
-	cmd := windowsTerminalCommand(terminal, ssh, target)
-	want := []string{terminal, "-w", "new", "new-tab", "--title", "DGX Hub - " + target, "--", ssh, "-tt", "--", target}
-	if !reflect.DeepEqual(cmd.Args, want) {
-		t.Fatalf("terminal arguments changed: %#v", cmd.Args)
-	}
-	if cmd.SysProcAttr != nil && (cmd.SysProcAttr.HideWindow || cmd.SysProcAttr.CreationFlags&createNoWindow != 0) {
-		t.Fatal("Windows Terminal was launched with hidden/background flags")
+	for _, item := range []struct{ color, hex string }{
+		{"green", "#b5f5ca"}, {"blue", "#99c8ff"}, {"orange", "#ffbc85"},
+		{"red", "#ffa8ad"}, {"yellow", "#f7df8c"}, {"", "#b5f5ca"},
+		{"; new-tab calc.exe", "#b5f5ca"},
+	} {
+		t.Run(item.color, func(t *testing.T) {
+			cmd := windowsTerminalCommand(terminal, ssh, target, item.color)
+			want := []string{terminal, "-w", "new", "new-tab", "--title", "DGX Hub - " + target, "--tabColor", item.hex, "--", ssh, "-tt", "--", target}
+			if !reflect.DeepEqual(cmd.Args, want) {
+				t.Fatalf("terminal arguments changed: %#v", cmd.Args)
+			}
+			if cmd.SysProcAttr != nil && (cmd.SysProcAttr.HideWindow || cmd.SysProcAttr.CreationFlags&createNoWindow != 0) {
+				t.Fatal("Windows Terminal was launched with hidden/background flags")
+			}
+		})
 	}
 }
 
 func TestWindowsTerminalEarlyFailureFallsBack(t *testing.T) {
 	var fallbackCalls, terminalCalls int
-	err := launchTerminal("test-user@example.invalid", terminalLaunchers{
+	err := launchTerminal("test-user@example.invalid", "orange", terminalLaunchers{
 		lookup: func(name string) (string, error) { return `C:\Tools\` + name, nil },
 		windowsTerminal: func(cmd *exec.Cmd) error {
 			terminalCalls++
@@ -101,7 +109,7 @@ func TestWindowsTerminalEarlyFailureFallsBack(t *testing.T) {
 }
 
 func TestTerminalLaunchReportsBothFailures(t *testing.T) {
-	err := launchTerminal("elly", terminalLaunchers{
+	err := launchTerminal("elly", "red", terminalLaunchers{
 		lookup:          func(name string) (string, error) { return name, nil },
 		windowsTerminal: func(*exec.Cmd) error { return errors.New("terminal activation denied") },
 		console:         func(string, []string) error { return errors.New("console access denied") },
@@ -191,7 +199,7 @@ func TestWindowsTerminalOpensVisibleSSHWindow(t *testing.T) {
 			procPostMessage.Call(visibleWindow, wmClose, 0, 0)
 		}
 	})
-	if err := LaunchTerminal(target); err != nil {
+	if err := LaunchTerminal(target, "blue"); err != nil {
 		t.Fatal(err)
 	}
 	var record terminalLaunchRecord
@@ -250,7 +258,7 @@ func TestTerminalFallbackStartsInteractiveConsole(t *testing.T) {
 	t.Setenv("DGX_HUB_TERMINAL_HELPER", "1")
 	t.Setenv("DGX_HUB_TERMINAL_RECORD", recordPath)
 	const target = "test-user@[::1]"
-	if err := LaunchTerminal(target); err != nil {
+	if err := LaunchTerminal(target, "yellow"); err != nil {
 		t.Fatal(err)
 	}
 	var record terminalLaunchRecord

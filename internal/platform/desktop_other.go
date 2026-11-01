@@ -26,7 +26,7 @@ func OpenBrowser(rawURL string) error {
 	return nil
 }
 
-func LaunchTerminal(target string) error {
+func LaunchTerminal(target, color string) error {
 	if err := validateTerminalTarget(target); err != nil {
 		return err
 	}

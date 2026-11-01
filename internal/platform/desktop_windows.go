@@ -73,8 +73,8 @@ func ShowError(title, message string) {
 // LaunchTerminal opens an interactive system-OpenSSH session. Windows Terminal
 // is preferred. If unavailable, OpenSSH gets its own native console; this avoids
 // PowerShell command interpolation and execution-policy dependencies.
-func LaunchTerminal(target string) error {
-	return launchTerminal(target, terminalLaunchers{
+func LaunchTerminal(target, color string) error {
+	return launchTerminal(target, color, terminalLaunchers{
 		lookup:          exec.LookPath,
 		windowsTerminal: launchWindowsTerminal,
 		console:         launchConsole,
@@ -87,7 +87,7 @@ type terminalLaunchers struct {
 	console         func(string, []string) error
 }
 
-func launchTerminal(target string, launchers terminalLaunchers) error {
+func launchTerminal(target, color string, launchers terminalLaunchers) error {
 	if err := validateTerminalTarget(target); err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func launchTerminal(target string, launchers terminalLaunchers) error {
 	args := []string{"-tt", "--", target}
 	var terminalErr error
 	if terminal, lookupErr := launchers.lookup("wt.exe"); lookupErr == nil {
-		if terminalErr = launchers.windowsTerminal(windowsTerminalCommand(terminal, ssh, target)); terminalErr == nil {
+		if terminalErr = launchers.windowsTerminal(windowsTerminalCommand(terminal, ssh, target, color)); terminalErr == nil {
 			return nil
 		}
 		log.Printf("Windows Terminal could not open; using SSH console fallback: %v", terminalErr)
@@ -109,11 +109,28 @@ func launchTerminal(target string, launchers terminalLaunchers) error {
 	return err
 }
 
-func windowsTerminalCommand(terminal, ssh, target string) *exec.Cmd {
+func windowsTerminalCommand(terminal, ssh, target, color string) *exec.Cmd {
 	// This is a visible GUI launch. Background() would pass SW_HIDE to Windows
 	// Terminal and can leave its window invisible when DGX Hub has no console.
 	// A new window also avoids routing the tab to a minimized/hidden existing one.
-	return exec.Command(terminal, "-w", "new", "new-tab", "--title", "DGX Hub - "+target, "--", ssh, "-tt", "--", target)
+	return exec.Command(terminal, "-w", "new", "new-tab", "--title", "DGX Hub - "+target, "--tabColor", terminalTabColor(color), "--", ssh, "-tt", "--", target)
+}
+
+// Match the node palette in web/src/node-colors.css. Only fixed values reach
+// Windows Terminal, including when a legacy node has no saved color.
+func terminalTabColor(color string) string {
+	switch color {
+	case "blue":
+		return "#99c8ff"
+	case "orange":
+		return "#ffbc85"
+	case "red":
+		return "#ffa8ad"
+	case "yellow":
+		return "#f7df8c"
+	default:
+		return "#b5f5ca"
+	}
 }
 
 type terminalOutput struct{ data []byte }
