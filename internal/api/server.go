@@ -106,7 +106,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/session", func(w http.ResponseWriter, r *http.Request) {
-		jsonResponse(w, 200, map[string]string{"csrf_token": s.csrf, "launch_token": s.launch, "version": s.version})
+		jsonResponse(w, 200, map[string]string{"app": "dgx-hub", "csrf_token": s.csrf, "launch_token": s.launch, "version": s.version})
 	})
 	s.mux.HandleFunc("GET /api/nodes", s.listNodes)
 	s.mux.HandleFunc("POST /api/nodes", s.createNode)

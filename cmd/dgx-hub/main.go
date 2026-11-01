@@ -31,14 +31,36 @@ func main() {
 		os.Exit(1)
 	}
 }
-func run() (runErr error) {
-	port := flag.Int("port", 8787, "local dashboard port (127.0.0.1 only)")
-	dataDir := flag.String("data-dir", "", "override the per-user data directory")
-	noTray := flag.Bool("no-tray", false, "run without tray integration for development")
-	flag.Parse()
+func run() error {
+	return runWithDesktop(os.Args[1:], desktopIntegration{openBrowser: platform.OpenBrowser, runTray: platform.RunTray})
+}
+
+func runWithDesktop(args []string, desktop desktopIntegration) (runErr error) {
+	flags := flag.NewFlagSet("dgx-hub", flag.ContinueOnError)
+	port := flags.Int("port", 8787, "local dashboard port (127.0.0.1 only)")
+	dataDir := flags.String("data-dir", "", "override the per-user data directory")
+	noTray := flags.Bool("no-tray", false, "run without tray integration or automatic browser opening for development")
+	if err := flags.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return nil
+		}
+		return err
+	}
 	if *port < 1 || *port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
 	}
+	address := fmt.Sprintf("127.0.0.1:%d", *port)
+	var opener func(string) error
+	if !*noTray {
+		opener = desktop.openBrowser
+	}
+	listener, err := listenOrOpen(context.Background(), address, opener)
+	if err != nil || listener == nil {
+		return err
+	}
+	defer listener.Close()
+	// A repeated desktop launch finishes above, before touching logs, storage,
+	// migrations, SSH operations or a second tray icon.
 	useDefaultDataDir := *dataDir == ""
 	if useDefaultDataDir {
 		dir, err := platform.DataDir()
@@ -62,12 +84,6 @@ func run() (runErr error) {
 		_ = logFile.Close()
 	}()
 	log.SetOutput(logFile)
-	address := fmt.Sprintf("127.0.0.1:%d", *port)
-	listener, err := net.Listen("tcp4", address)
-	if err != nil {
-		return fmt.Errorf("cannot listen on %s; DGX Hub may already be running: %w", address, err)
-	}
-	defer listener.Close()
 	{
 		legacyDir := ""
 		if !useDefaultDataDir {
@@ -111,9 +127,14 @@ func run() (runErr error) {
 		}
 	}()
 	log.Printf("DGX Hub %s listening at http://%s", version, address)
+	if !*noTray {
+		if browserErr := desktop.openBrowser("http://" + address + "/"); browserErr != nil {
+			log.Printf("open dashboard in browser: %v; open http://%s/ manually or retry from the tray", browserErr, address)
+		}
+	}
 	if *noTray {
 		<-ctx.Done()
-	} else if err = platform.RunTray(ctx, "http://"+address, cancel); err != nil {
+	} else if err = desktop.runTray(ctx, "http://"+address, cancel); err != nil {
 		log.Printf("tray error: %v", err)
 		cancel()
 	}

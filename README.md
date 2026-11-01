@@ -12,8 +12,8 @@ On the first normal launch, DGX Hub imports the existing `%LOCALAPPDATA%\FoxHub\
 
 1. Download or build `dist/dgx-hub.exe`. It is a standalone binary with the React UI embedded; Node.js and Go are only needed for building.
 2. Enable **OpenSSH Client** in Windows Optional Features if `ssh -V` does not work. The client is needed on this PC; installing an SSH server on this PC is unnecessary.
-3. Run `dgx-hub.exe`. It stays in the background and adds the **DGX Hub fox** icon to the notification area. Windows may place it in the hidden-icons overflow.
-4. Right-click the icon and choose **Open DGX Hub**. The default address is `http://127.0.0.1:8787`.
+3. Run `dgx-hub.exe`. It opens the dashboard in your default browser, stays in the background and adds the **DGX Hub fox** icon to the notification area. Windows may place it in the hidden-icons overflow.
+4. To open the dashboard again, double-click the exe or its shortcut, or right-click the tray icon and choose **Open DGX Hub**. A repeated launch opens the already running instance and exits, without starting another tray icon, database or SSH poller. The default address is `http://127.0.0.1:8787`.
 5. Add your nodes using the same target you use with `ssh`, such as `spark_1` or `user@192.168.1.10`. No nodes or services are added automatically.
 6. Choose **SSH setup** on each node card. DGX Hub checks background access and shows step-by-step help when keys or host-key trust need attention.
 7. Add a service with its remote host and port. For an application listening on Spark_1's loopback interface, use `127.0.0.1` as the **remote host**. **Open** creates or reuses an SSH tunnel and opens a new browser tab.
@@ -111,7 +111,7 @@ dgx-hub.exe --data-dir C:\path\to\custom-data
 dgx-hub.exe --no-tray
 ```
 
-`--no-tray` is for development/test runs. The release binary has no console window; use a console build below when you need Ctrl+C. The API always binds to `127.0.0.1`; a flag cannot expose it to the LAN.
+`--no-tray` is for development/test runs and disables automatic browser opening. In this mode an occupied port remains an error. Normal desktop launches reuse DGX Hub on the selected `--port`, including older DGX Hub builds, and briefly wait if that instance is still starting. If another application owns the port, DGX Hub reports the conflict instead of opening it. The release binary has no console window; use a console build below when you need Ctrl+C. The API always binds to `127.0.0.1`; a flag cannot expose it to the LAN.
 
 Common problems:
 
