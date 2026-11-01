@@ -35,6 +35,8 @@ try {
     & $goExecutable run ./internal/platform/iconresource -out cmd/dgx-hub/resources_windows_amd64.syso -version 0.1.2
     if ($LASTEXITCODE -ne 0) { throw 'Windows icon resource generation failed' }
     if (-not $SkipTests) {
+        & $npmExecutable --prefix web test
+        if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed' }
         Remove-Item Env:GOOS -ErrorAction SilentlyContinue
         Remove-Item Env:GOARCH -ErrorAction SilentlyContinue
         & $goExecutable test ./...

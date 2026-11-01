@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { api, getSession } from './api';
+import { api } from './api';
+import { useDashboard } from './useDashboard';
 import { t } from './strings';
 import { Modal } from './Modal';
 import { NodeActions } from './Actions';
 import { NodeName, nodeColorClass, nodeColors } from './NodeName';
-import type { Metrics, Node, NodeInput, Service, ServiceInput, Session, SSHCheck, TerminalResult } from './types';
+import type { Metrics, Node, NodeInput, Service, ServiceInput, SSHCheck, TerminalResult } from './types';
 
 type IconName = 'plus' | 'grid' | 'server' | 'link' | 'terminal' | 'arrow' | 'edit' | 'trash' | 'close' | 'refresh' | 'shield' | 'copy' | 'check' | 'alert' | 'chevron';
 function Icon({ name, size = 18, className = '' }: { name: IconName; size?: number; className?: string }) {
@@ -26,6 +27,7 @@ function Icon({ name, size = 18, className = '' }: { name: IconName; size?: numb
 
 const errorText = (error: unknown) => error instanceof Error ? error.message : t.requestFailed;
 const percent = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? t.na : `${Math.round(value)}%`;
+const reading = (value: number | null | undefined, unit: string, decimals: number) => value == null || !Number.isFinite(value) ? t.na : `${value.toFixed(decimals)} ${unit}`;
 function bytes(value: number): string {
   if (!Number.isFinite(value) || value < 0) return t.na;
   const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
@@ -60,6 +62,7 @@ function NodeCard({ node, metrics, onEdit, onDelete, onSetup, onTerminal, onActi
   return <article className={`node-card ${nodeColorClass(node)} ${metrics?.stale ? 'node-stale' : ''}`}>
     <div className="node-top"><div className="node-avatar"><Icon name="server" size={22} /></div><div className="node-identity"><h3><NodeName node={node} /></h3><code>{node.ssh_target}</code></div><span className={`status status-${status}`}><i />{t.statuses[status] || t.statuses.unknown}</span></div>
     <div className="metrics-grid"><Meter label={t.cpu} value={metrics?.cpu} error={metrics?.errors?.cpu} /><Meter label={t.gpu} value={metrics?.gpu} error={metrics?.errors?.gpu} /></div>
+    <dl className="device-vitals"><div title={metrics?.errors?.temperature}><dt>{t.deviceTemp}</dt><dd>{reading(metrics?.temperature_c, '°C', 0)}</dd></div><div title={metrics?.errors?.power}><dt>{t.devicePower}</dt><dd>{reading(metrics?.power_w, 'W', 1)}</dd></div></dl>
     <Meter label={t.memory} value={metrics?.memory?.percent} error={metrics?.errors?.memory} detail={metrics?.memory ? `${bytes(metrics.memory.used)} / ${bytes(metrics.memory.total)}` : undefined} />
     <div className="shared-memory-note">{t.unified}</div>
     {metrics?.disks?.length ? metrics.disks.map(disk => <Meter key={`${disk.mount}:${disk.path}`} label={`${t.disk} · ${disk.path}`} value={disk.percent} detail={`${bytes(disk.used)} / ${bytes(disk.total)}`} />) : <Meter label={`${t.disk} · /`} value={null} error={metrics?.errors?.disk} />}
@@ -140,48 +143,15 @@ type Editor = { type: 'node'; node?: Node } | { type: 'service'; service?: Servi
 type Notice = { text: string; error?: boolean; command?: string };
 
 export default function App() {
-  const [nodes, setNodes] = useState<Node[]>([]); const [services, setServices] = useState<Service[]>([]);
-  const [metrics, setMetrics] = useState<Record<string, Metrics>>({}); const [session, setSession] = useState<Session>();
-  const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [connectionError, setConnectionError] = useState('');
   const [editor, setEditor] = useState<Editor>(); const [notice, setNotice] = useState<Notice>(); const [deleting, setDeleting] = useState(false); const [deleteError, setDeleteError] = useState('');
-  const inFlight = useRef(false); const queuedRefresh = useRef(false); const alive = useRef(true);
-  const refresh = useCallback(async () => {
-    if (inFlight.current) { queuedRefresh.current = true; return; }
-    inFlight.current = true; setRefreshing(true);
-    try {
-      const [sessionResult, nodeResult, serviceResult] = await Promise.allSettled([getSession(true), api<{ nodes: Node[] }>('/api/nodes'), api<{ services: Service[] }>('/api/services')]);
-      if (!alive.current) return;
-      if (sessionResult.status === 'fulfilled') setSession(sessionResult.value);
-      if (serviceResult.status === 'fulfilled') setServices(serviceResult.value.services || []);
-      if (nodeResult.status === 'rejected') throw nodeResult.reason;
-      const currentNodes = nodeResult.value.nodes || []; setNodes(currentNodes);
-      setConnectionError(serviceResult.status === 'rejected' ? errorText(serviceResult.reason) : sessionResult.status === 'rejected' ? errorText(sessionResult.reason) : '');
-      await Promise.all(currentNodes.map(async node => {
-        try { const result = await api<Metrics>(`/api/nodes/${node.id}/metrics`); if (alive.current) setMetrics(current => ({ ...current, [node.id]: result })); }
-        catch (err) { if (alive.current) setMetrics(current => ({ ...current, [node.id]: { ...(current[node.id] || { node_id: node.id, cpu: null, gpu: null, memory: null, disks: [] }), status: 'error', stale: Boolean(current[node.id]?.last_success), errors: { ssh: errorText(err) } } })); }
-      }));
-    } catch (err) { if (alive.current) setConnectionError(errorText(err)); }
-    finally {
-      inFlight.current = false;
-      if (alive.current) {
-        setLoading(false); setRefreshing(false);
-        if (queuedRefresh.current) { queuedRefresh.current = false; void refresh(); }
-      }
-    }
-  }, []);
-  useEffect(() => {
-    alive.current = true; let timer: ReturnType<typeof setTimeout>; let cancelled = false;
-    const tick = async () => { await refresh(); if (!cancelled) timer = setTimeout(tick, 10_000); };
-    void tick();
-    return () => { cancelled = true; alive.current = false; clearTimeout(timer); };
-  }, [refresh]);
+  const { nodes, services, metrics, session, loading, refreshing, connectionError, refresh, pause } = useDashboard(Boolean(editor));
   useEffect(() => { if (!notice || notice.command || notice.error) return; const timer = setTimeout(() => setNotice(undefined), 4500); return () => clearTimeout(timer); }, [notice]);
   const afterCheck = useCallback(() => { void refresh(); }, [refresh]);
   async function terminal(node: Node) {
     try { const result = await api<TerminalResult>(`/api/nodes/${node.id}/terminal`, 'POST'); setNotice(result.ok ? { text: t.terminalOpened } : { text: result.error || t.terminalFailed, error: true, command: result.command || `ssh ${node.ssh_target}` }); }
     catch (err) { setNotice({ text: errorText(err), error: true, command: `ssh ${node.ssh_target}` }); }
   }
-  function openEditor(value: Editor) { setDeleteError(''); setEditor(value); }
+  function openEditor(value: Editor) { pause(); setDeleteError(''); setEditor(value); }
   async function saveNode(value: NodeInput) {
     const existing = editor?.type === 'node' ? editor.node : undefined;
     await api<Node>(existing ? `/api/nodes/${existing.id}` : '/api/nodes', existing ? 'PATCH' : 'POST', value);

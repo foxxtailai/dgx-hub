@@ -6,6 +6,7 @@ command -v go >/dev/null || { echo 'Install Go 1.26 or newer.' >&2; exit 1; }
 command -v npm >/dev/null || { echo 'Install Node.js 22.12+ and npm.' >&2; exit 1; }
 npm --prefix web ci
 npm --prefix web run build
+npm --prefix web test
 go mod download
 CGO_ENABLED=0 go test ./...
 mkdir -p dist

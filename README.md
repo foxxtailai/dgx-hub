@@ -70,6 +70,8 @@ HTTP and HTTPS are supported. DGX Hub does not bypass HTTPS certificate checks, 
 
 RAM is shown once as shared system memory; GPU activity is separate and displays **N/A** if unsupported. CPU is calculated from two `/proc/stat` snapshots. Memory uses `MemTotal - MemAvailable`; disks on the same mount are shown once. Failed polls retain previous readings marked stale.
 
+Node cards also show **Device Temp** (°C) and **Device Power** (W), using the same `temperature.gpu` and `power.draw` readings as NVIDIA Sync's Resource Monitor. Unsupported sensors display **N/A** independently of other readings. Dashboard metrics refresh approximately every 10 seconds. Opening any settings, confirmation, SSH setup or Actions window pauses dashboard updates and discards in-flight dashboard responses; closing it refreshes once and resumes the timer. Server-side telemetry, service tunnels and action execution/log updates continue independently.
+
 ## Node Actions
 
 Choose **Actions** beside **Terminal** on a node card, then **Create action**. Set a name and optional description, enter one or more commands, and select the nodes that should share the definition. Actions belong to a central local catalogue: **Assign** adds an existing action to another node, and editing it updates the shared definition. An action can also remain unassigned in the catalogue. No example actions are installed automatically.
@@ -122,7 +124,7 @@ Prerequisites: Go **1.26+**, Node.js **22.12+**, npm, and system OpenSSH. SQLite
 .\build.ps1
 ```
 
-The script builds the React UI, runs Go tests, and writes `dist/dgx-hub.exe`. `-SkipInstall` reuses an existing `web/node_modules`. Go caches stay inside `.cache/`; a local SDK at `.tools/go/bin/go.exe` is recognized when Go is absent from PATH.
+The script builds the React UI, runs frontend and Go tests, and writes `dist/dgx-hub.exe`. `-SkipInstall` reuses an existing `web/node_modules`. Go caches stay inside `.cache/`; a local SDK at `.tools/go/bin/go.exe` is recognized when Go is absent from PATH.
 
 Generated UI files, Windows resources, SDKs, caches and release binaries are excluded from Git. A fresh checkout must build `web/dist` before direct Go tests/builds; `build.ps1` performs these steps in order. Keep `go.sum` and `web/package-lock.json` in the repository.
 

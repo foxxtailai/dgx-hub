@@ -48,6 +48,39 @@ func (fakeMetrics) Poll(context.Context, model.Node) model.Metrics { return mode
 func (fakeMetrics) Get(string) model.Metrics                       { return model.Metrics{Status: "connecting"} }
 func (fakeMetrics) Remove(string)                                  {}
 
+type sensorMetrics struct {
+	fakeMetrics
+	value model.Metrics
+}
+
+func (m sensorMetrics) Get(string) model.Metrics { return m.value }
+
+func TestMetricsSensorJSONIncludesNumbersAndNulls(t *testing.T) {
+	s, _ := setup(t)
+	node, err := s.store.SaveNode(model.Node{Name: "Sensors", SSHTarget: "test"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zero, temperature := 0.0, 61.5
+	for _, value := range []model.Metrics{{}, {TemperatureC: &temperature, PowerW: &zero}} {
+		s.metrics = sensorMetrics{value: value}
+		response := request(s, "GET", "/api/nodes/"+node.ID+"/metrics", "", false)
+		var payload map[string]any
+		if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &payload) != nil {
+			t.Fatal(response.Body.String())
+		}
+		for _, field := range []struct {
+			key   string
+			value *float64
+		}{{"temperature_c", value.TemperatureC}, {"power_w", value.PowerW}} {
+			got, present := payload[field.key]
+			if !present || (field.value == nil && got != nil) || (field.value != nil && got != *field.value) {
+				t.Fatalf("%s: %#v", field.key, payload)
+			}
+		}
+	}
+}
+
 type fakeTunnels struct {
 	ensures                   int
 	closedNode, closedService string

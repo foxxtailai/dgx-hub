@@ -21,6 +21,7 @@ export const t = {
   hostHint: 'Address as seen by the remote node. Usually 127.0.0.1.', protocol: 'Protocol', path: 'URL path',
   pathHint: 'Start with /, for example / or /dashboard.', open: 'Open', endpoint: 'Remote endpoint', actions: 'Actions',
   cpu: 'CPU', gpu: 'GPU activity', memory: 'Shared memory', disk: 'Disk', na: 'N/A', stale: 'Stale data', noReading: 'Waiting for first reading',
+  deviceTemp: 'Device Temp', devicePower: 'Device Power', updatesPaused: 'Dashboard updates paused while this window is open.',
   lastSuccess: 'Last successful reading', never: 'Not polled yet', unified: 'System and GPU share this memory.',
   statuses: { online: 'Online', offline: 'Offline', connecting: 'Connecting', error: 'Error', unknown: 'Waiting' } as Record<string, string>,
   setupRequired: 'SSH setup required', connectionFailed: 'Connection failed', reviewSetup: 'Review setup', connectedTitle: 'Connection ready',

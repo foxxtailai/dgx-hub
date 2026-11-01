@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -161,5 +162,83 @@ func TestDataPathIsStdinDataNotRemoteCommand(t *testing.T) {
 	m := c.Poll(context.Background(), model.Node{ID: "node", SSHTarget: "elly", DataPath: path})
 	if m.Status != "online" {
 		t.Fatal(m.Errors)
+	}
+}
+
+func TestDeviceSensorsAreIndependent(t *testing.T) {
+	for _, tc := range []struct {
+		name, record     string
+		gpu, temp, power *float64
+	}{
+		{"valid", "GPU\t25\t 62.4\t 45.67", number(25), number(62.4), number(45.67)},
+		{"zero", "GPU\t0\t0\t0", number(0), number(0), number(0)},
+		{"gpu unavailable", "GPU\tN/A\t61\t45.5", nil, number(61), number(45.5)},
+		{"temperature unavailable", "GPU\t25\t[Not Supported]\t45.5", number(25), nil, number(45.5)},
+		{"power unavailable", "GPU\t25\t61\tN/A", number(25), number(61), nil},
+		{"nonfinite", "GPU\tNaN\t+Inf\t-Inf", nil, nil, nil},
+		{"negative", "GPU\t-1\t-1\t-1", nil, nil, nil},
+		{"invalid utilization", "GPU\t101\t61\t45.5", nil, number(61), number(45.5)},
+		{"empty sensors", "GPU\t25\t\t", number(25), nil, nil},
+		{"malformed record", "GPU\t25\t61", nil, nil, nil},
+		{"legacy", "GPU\t25", number(25), nil, nil},
+		{"multiple GPUs", "GPU\t25\t61\t45.5\nGPU\t50\t70\t65", nil, nil, nil},
+		{"missing", "", nil, nil, nil},
+		{"command failed", "ERROR\tgpu\ttimed out\nERROR\ttemperature\ttimed out\nERROR\tpower\ttimed out", nil, nil, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := Parse(strings.Replace(sample, "GPU\tN/A", tc.record, 1), "node", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, field := range []struct {
+				name      string
+				got, want *float64
+			}{
+				{"gpu", m.GPU, tc.gpu}, {"temperature", m.TemperatureC, tc.temp}, {"power", m.PowerW, tc.power},
+			} {
+				if (field.got == nil) != (field.want == nil) || (field.want != nil && math.Abs(*field.got-*field.want) > 0.00001) {
+					t.Fatalf("%s got %v want %v", field.name, field.got, field.want)
+				}
+				if (m.Errors[field.name] != "") != (field.want == nil) {
+					t.Fatalf("wrong field error for %s: %v", field.name, m.Errors)
+				}
+			}
+			if m.CPU == nil || m.Memory == nil || len(m.Disks) == 0 {
+				t.Fatal("sensor error discarded other metrics")
+			}
+		})
+	}
+}
+
+func number(value float64) *float64 { return &value }
+
+func TestDeviceSensorsSurviveStaleAndCacheCopies(t *testing.T) {
+	c := testCollector()
+	node := model.Node{ID: "node", SSHTarget: "elly"}
+	c.run = func(context.Context, []string, io.Reader) (string, string, error) {
+		return strings.Replace(sample, "GPU\tN/A", "GPU\t25\t61\t45.5", 1), "", nil
+	}
+	first := c.Poll(context.Background(), node)
+	*first.TemperatureC = 900
+	*first.PowerW = 900
+	copy := c.Get(node.ID)
+	if *copy.TemperatureC != 61 || *copy.PowerW != 45.5 {
+		t.Fatal("Poll exposed cached pointers")
+	}
+	*copy.TemperatureC = 900
+	*copy.PowerW = 900
+	c.run = func(context.Context, []string, io.Reader) (string, string, error) {
+		return "", "Connection refused", errors.New("exit status 255")
+	}
+	stale := c.Poll(context.Background(), node)
+	if !stale.Stale || *stale.TemperatureC != 61 || *stale.PowerW != 45.5 || !stale.LastSuccess.Equal(*first.LastSuccess) {
+		t.Fatalf("stale sensors: %+v", stale)
+	}
+	c.run = func(context.Context, []string, io.Reader) (string, string, error) {
+		return strings.Replace(sample, "GPU\tN/A", "GPU\t25\t62\tN/A", 1), "", nil
+	}
+	recovered := c.Poll(context.Background(), node)
+	if recovered.Stale || recovered.Status != "online" || *recovered.TemperatureC != 62 || recovered.PowerW != nil || recovered.Errors["power"] == "" || recovered.Errors["ssh"] != "" {
+		t.Fatalf("recovery: %+v", recovered)
 	}
 }

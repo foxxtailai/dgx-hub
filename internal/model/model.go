@@ -35,15 +35,17 @@ type Disk struct {
 }
 
 type Metrics struct {
-	NodeID      string            `json:"node_id"`
-	Status      string            `json:"status"`
-	LastSuccess *time.Time        `json:"last_success,omitempty"`
-	Stale       bool              `json:"stale"`
-	CPU         *float64          `json:"cpu"`
-	GPU         *float64          `json:"gpu"`
-	Memory      *Memory           `json:"memory"`
-	Disks       []Disk            `json:"disks"`
-	Errors      map[string]string `json:"errors"`
+	NodeID       string            `json:"node_id"`
+	Status       string            `json:"status"`
+	LastSuccess  *time.Time        `json:"last_success,omitempty"`
+	Stale        bool              `json:"stale"`
+	CPU          *float64          `json:"cpu"`
+	GPU          *float64          `json:"gpu"`
+	TemperatureC *float64          `json:"temperature_c"`
+	PowerW       *float64          `json:"power_w"`
+	Memory       *Memory           `json:"memory"`
+	Disks        []Disk            `json:"disks"`
+	Errors       map[string]string `json:"errors"`
 }
 
 type SSHCheck struct {

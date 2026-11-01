@@ -55,6 +55,14 @@ func clone(m model.Metrics) model.Metrics {
 		v := *m.GPU
 		m.GPU = &v
 	}
+	if m.TemperatureC != nil {
+		v := *m.TemperatureC
+		m.TemperatureC = &v
+	}
+	if m.PowerW != nil {
+		v := *m.PowerW
+		m.PowerW = &v
+	}
 	if m.Memory != nil {
 		v := *m.Memory
 		m.Memory = &v
@@ -177,10 +185,13 @@ disk() {
 disk root /
 if [ -n "$data_path" ]; then disk data "$data_path"; fi
 if command -v nvidia-smi >/dev/null 2>&1; then
-  gpu_output=$(timeout 3 nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>&1)
-  if [ "$?" -eq 0 ]; then printf '%s\n' "$gpu_output" | while IFS= read -r gpu; do printf 'GPU\t%s\n' "$gpu"; done
-  else printf 'ERROR\tgpu\t'; printf '%s' "$gpu_output" | tr '\n\t' '  '; printf '\n'; fi
-else printf 'ERROR\tgpu\tnvidia-smi is not installed\n'; fi
+  gpu_output=$(timeout 3 nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,power.draw --format=csv,noheader,nounits 2>&1)
+  if [ "$?" -eq 0 ]; then printf '%s\n' "$gpu_output" | awk -F, '{printf "GPU\t%s\t%s\t%s\n",$1,$2,$3}'
+  else
+    gpu_error=$(printf '%s' "$gpu_output" | tr '\n\t' '  ')
+    for field in gpu temperature power; do printf 'ERROR\t%s\t%s\n' "$field" "$gpu_error"; done
+  fi
+else for field in gpu temperature power; do printf 'ERROR\t%s\tnvidia-smi is not installed\n' "$field"; done; fi
 sleep 0.3
 awk '/^cpu / {printf "CPU2"; for(i=2;i<=9;i++) printf "\t%s",$i; printf "\n"; exit}' /proc/stat 2>/dev/null || printf 'ERROR\tcpu\tCannot read second /proc/stat sample\n'
 `
@@ -233,16 +244,19 @@ func Parse(output, nodeID, dataPath string) (model.Metrics, error) {
 			m.Memory = &model.Memory{Total: total, Used: total - available, Percent: float64(total-available) / float64(total) * 100}
 		case "GPU":
 			gpuCount++
-			if len(p) != 2 {
-				m.Errors["gpu"] = "GPU utilization is unavailable"
+			// Accept the previous utilization-only record as well as the new
+			// three-field record. Unsupported sensors are independent of utilization.
+			if len(p) != 2 && len(p) != 4 {
+				m.Errors["gpu"] = "Invalid GPU reading"
+				m.Errors["temperature"] = "Invalid GPU reading"
+				m.Errors["power"] = "Invalid GPU reading"
 				continue
 			}
-			v, err := strconv.ParseFloat(strings.TrimSpace(p[1]), 64)
-			if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > 100 {
-				m.Errors["gpu"] = "GPU utilization is unavailable: " + strings.Join(p[1:], " ")
-				continue
+			m.GPU = sensor(p[1], "gpu", "GPU utilization", 100, m.Errors)
+			if len(p) == 4 {
+				m.TemperatureC = sensor(p[2], "temperature", "Device temperature", math.Inf(1), m.Errors)
+				m.PowerW = sensor(p[3], "power", "Device power", math.Inf(1), m.Errors)
 			}
-			m.GPU = &v
 		case "DISK":
 			if len(p) != 5 && len(p) != 6 {
 				m.Errors["disk"] = "Invalid disk reading"
@@ -307,15 +321,33 @@ func Parse(output, nodeID, dataPath string) (model.Metrics, error) {
 	}
 	if gpuCount > 1 {
 		m.GPU = nil
-		m.Errors["gpu"] = "Multiple GPU readings are not supported by this Spark dashboard"
+		m.TemperatureC = nil
+		m.PowerW = nil
+		for _, field := range []string{"gpu", "temperature", "power"} {
+			m.Errors[field] = "Multiple GPU readings are not supported by this Spark dashboard"
+		}
 	}
 	if m.GPU == nil && m.Errors["gpu"] == "" {
 		m.Errors["gpu"] = "GPU utilization is unavailable"
+	}
+	if m.TemperatureC == nil && m.Errors["temperature"] == "" {
+		m.Errors["temperature"] = "Device temperature is unavailable"
+	}
+	if m.PowerW == nil && m.Errors["power"] == "" {
+		m.Errors["power"] = "Device power is unavailable"
 	}
 	if len(m.Disks) == 0 && m.Errors["disk"] == "" && m.Errors["disk_root"] == "" {
 		m.Errors["disk"] = "Disk readings are unavailable"
 	}
 	return m, nil
+}
+func sensor(raw, field, label string, max float64, errs map[string]string) *float64 {
+	v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > max {
+		errs[field] = label + " is unavailable: " + strings.TrimSpace(raw)
+		return nil
+	}
+	return &v
 }
 func parseCPU(fields []string) ([]uint64, error) {
 	if len(fields) != 8 {

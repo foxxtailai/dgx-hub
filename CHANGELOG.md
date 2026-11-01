@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Device Temp and Device Power on node cards, with independent N/A handling and stale readings preserved after SSH failure.
+- Dashboard refresh pauses while any settings or Actions window is open, ignores cancelled requests and resumes once on close. Action execution and live logs continue independently.
+- Frontend regression tests cover refresh timing, cancellation, form state and independent action polling; both build scripts run them.
 - Windows Terminal tabs inherit the node's saved color when opening an SSH session.
 - Five saved node colors (light green, blue, orange, red and yellow), shown on node cards, service node names, SSH setup and Actions. Existing nodes default to light green; changing only the color preserves active work.
 - Shared Node Actions catalogue with reusable node assignments and an ordered multiline command editor.
