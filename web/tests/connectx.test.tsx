@@ -6,17 +6,18 @@ import type { Metrics, Node } from '../src/types';
 const peer: Node = { id: 'b', name: 'Spark Beta', color: 'blue', ssh_target: 'spark-b', data_path: '' };
 const metrics: Metrics = {
   node_id: 'a', status: 'online', stale: false, cpu: null, gpu: null, temperature_c: null, power_w: null, memory: null, disks: [], errors: {},
-  connectx: { status: 'connected', interfaces: [], peers: [{ node_id: 'b', links: [{ interface: 'enp1s0f0np0', peer_interface: 'enP2p1s0f0np0', speed_mbps: 200000 }] }] },
+  connectx: { status: 'connected', interfaces: [], peers: [{ node_id: 'b', links: ['enp1s0f0np0', 'enP2p1s0f0np0'].flatMap(source => ['enp1s0f0np0', 'enP2p1s0f0np0'].map(dest => ({ interface: source, peer_interface: dest, speed_mbps: 200000 }))) }] },
 };
 
 describe('ConnectX connection', () => {
-  it('shows the connected peer with its color, interfaces and speed', () => {
+  it('shows the peer once without presenting reachable interface pairs as physical channels', () => {
     render(<ConnectXStatus metrics={metrics} nodes={[peer]} />);
     const section = within(screen.getByRole('region', { name: 'ConnectX connection' }));
     expect(section.getByText('Connected')).toBeTruthy();
     expect(section.getByText('Spark Beta').closest('.node-color-blue')).toBeTruthy();
-    expect(section.getByText('enp1s0f0np0 ↔ enP2p1s0f0np0')).toBeTruthy();
-    expect(section.getByText('200 Gb/s')).toBeTruthy();
+    expect(section.getAllByText('Spark Beta')).toHaveLength(1);
+    expect(section.queryByText(/enp1s0f0np0|enP2p1s0f0np0/)).toBeNull();
+    expect(section.queryByText(/Gb\/s/)).toBeNull();
   });
 
   it.each(['disconnected', 'link_up', 'unknown', 'not_detected'] as const)('renders %s without inventing a peer', status => {

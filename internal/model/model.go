@@ -48,6 +48,7 @@ type ConnectXReachability struct {
 	MAC       string `json:"mac"`
 }
 
+// ConnectXLink is a reachable pair of logical interfaces, not a physical channel.
 type ConnectXLink struct {
 	Interface     string `json:"interface"`
 	PeerInterface string `json:"peer_interface"`

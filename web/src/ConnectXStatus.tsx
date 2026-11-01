@@ -16,9 +16,6 @@ export function ConnectXStatus({ metrics, nodes }: { metrics?: Metrics; nodes: N
     <div className="connectx-heading"><span>{t.connectX}</span><span className="connectx-status"><i />{checking ? t.connectXChecking : t.connectXStatuses[status]}</span></div>
     {status === 'connected' && <ul className="connectx-peers">{peers.map(peer => <li key={peer.node_id}>
       <span className={`connectx-peer-name ${nodeColorClass(peer.node)}`}><span aria-hidden="true">↔</span><NodeName node={peer.node} /></span>
-      <span className="connectx-links">{peer.links.map(link => <span key={`${link.interface}:${link.peer_interface}`} title={`${link.interface} ↔ ${link.peer_interface}`}>
-        <code>{link.interface} ↔ {link.peer_interface}</code>{link.speed_mbps > 0 && <span>{(link.speed_mbps / 1000).toLocaleString('en-US')} Gb/s</span>}
-      </span>)}</span>
     </li>)}</ul>}
   </section>;
 }
